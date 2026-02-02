@@ -101,7 +101,7 @@ struct MenuContent: View {
                     .padding(.bottom, 6)
             }
         }
-        .frame(width: 320)
+        .frame(width: 380)
     }
 }
 

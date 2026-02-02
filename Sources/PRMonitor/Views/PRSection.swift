@@ -56,11 +56,11 @@ struct PRRow: View {
                     .frame(width: 8, height: 8)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("#\(pr.number): \(pr.title)")
+                    Text(pr.title)
                         .lineLimit(1)
                         .truncationMode(.tail)
 
-                    Text(pr.repository)
+                    Text("\(pr.repository) #\(String(pr.number))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -105,5 +105,5 @@ struct PRRow: View {
             isExpanded: .constant(false)
         )
     }
-    .frame(width: 320)
+    .frame(width: 380)
 }
