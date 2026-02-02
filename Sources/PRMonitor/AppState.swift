@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UserNotifications
 
 @MainActor
 class AppState: ObservableObject {
@@ -29,9 +30,12 @@ class AppState: ObservableObject {
     }
 
     @AppStorage("pollInterval") var pollInterval: TimeInterval = 300 // 5 minutes
+    @AppStorage("notificationsEnabled") var notificationsEnabled: Bool = false
 
     private let gitHubService = GitHubService()
     private var pollTimer: Timer?
+    private var notifiedPRIds: Set<String> = []
+    private var isFirstLoad = true
 
     var needsReviewCount: Int {
         needsReview.count
@@ -44,6 +48,10 @@ class AppState: ObservableObject {
         }
     }
 
+    func requestNotificationPermissions() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
     func refresh() async {
         guard !isLoading else { return }
 
@@ -52,6 +60,19 @@ class AppState: ObservableObject {
 
         do {
             let results = try await gitHubService.fetchAllPRs()
+
+            // Check for new PRs needing review (skip on first load)
+            if !isFirstLoad && notificationsEnabled {
+                for pr in results.needsReview {
+                    if !notifiedPRIds.contains(pr.id) {
+                        sendNotification(for: pr)
+                    }
+                }
+            }
+
+            // Track all current needsReview PR IDs
+            notifiedPRIds = Set(results.needsReview.map { $0.id })
+            isFirstLoad = false
 
             needsReview = results.needsReview
             waitingForReviewers = results.waitingForReviewers
@@ -65,6 +86,23 @@ class AppState: ObservableObject {
         }
 
         isLoading = false
+    }
+
+    private func sendNotification(for pr: PullRequest) {
+        let content = UNMutableNotificationContent()
+        content.title = "Review Requested"
+        content.body = "#\(pr.number): \(pr.title)"
+        content.subtitle = pr.repository
+        content.sound = .default
+        content.userInfo = ["url": pr.url.absoluteString]
+
+        let request = UNNotificationRequest(
+            identifier: pr.id,
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request)
     }
 
     func startPolling() {
