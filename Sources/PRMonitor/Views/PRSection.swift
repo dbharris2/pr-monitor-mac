@@ -81,10 +81,11 @@ struct PRRow: View {
                     Text(pr.title)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                        .foregroundStyle(isHovered ? .white : .primary)
 
                     Text("\(pr.repository) #\(String(pr.number))")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(isHovered ? .white.opacity(0.8) : .secondary)
                 }
 
                 Spacer()
@@ -95,8 +96,11 @@ struct PRRow: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(isHovered ? Color.primary.opacity(0.1) : Color.clear)
             .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isHovered ? Color(nsColor: .selectedContentBackgroundColor) : Color.clear)
+            )
         }
         .buttonStyle(.plain)
         .onHover { hovering in

@@ -165,14 +165,18 @@ struct MenuRow: View {
                         .frame(width: 16, height: 16)
                 } else if let shortcut {
                     Text(shortcut)
-                        .foregroundStyle(.tertiary)
+                        .foregroundColor(isHovered ? .white.opacity(0.8) : .gray)
                         .font(.caption)
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
+            .foregroundColor(isHovered ? .white : .primary)
             .contentShape(Rectangle())
-            .background(isHovered ? Color.primary.opacity(0.1) : Color.clear)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isHovered ? Color(nsColor: .selectedContentBackgroundColor) : Color.clear)
+            )
         }
         .buttonStyle(.plain)
         .onHover { hovering in
@@ -203,7 +207,7 @@ struct SubMenuRow<Content: View>: View {
             .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(isExpanded ? Color.accentColor : (isHovered ? Color.primary.opacity(0.1) : Color.clear))
+                    .fill(isExpanded ? Color(nsColor: .selectedContentBackgroundColor) : (isHovered ? Color.primary.opacity(0.1) : Color.clear))
             )
             .foregroundStyle(isExpanded ? .white : .primary)
             .onTapGesture {
