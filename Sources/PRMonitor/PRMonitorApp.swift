@@ -62,13 +62,13 @@ struct MenuContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             PRSection(
-                title: "Needs your review",
+                title: "Needs my review",
                 prs: appState.needsReview,
                 isExpanded: appState.bindingForSection("needsReview")
             )
 
             PRSection(
-                title: "Waiting for reviewers",
+                title: "Waiting for review",
                 prs: appState.waitingForReviewers,
                 isExpanded: appState.bindingForSection("waitingForReviewers")
             )
@@ -77,6 +77,12 @@ struct MenuContent: View {
                 title: "Approved",
                 prs: appState.approved,
                 isExpanded: appState.bindingForSection("approved")
+            )
+
+            PRSection(
+                title: "Returned to me",
+                prs: appState.changesRequested,
+                isExpanded: appState.bindingForSection("changesRequested")
             )
 
             PRSection(
