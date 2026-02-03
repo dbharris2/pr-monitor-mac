@@ -46,6 +46,20 @@ struct PRRow: View {
     let pr: PullRequest
     @State private var isHovered = false
 
+    private var statusColor: Color {
+        if pr.isDraft {
+            return .secondary
+        }
+        switch pr.reviewDecision {
+        case .changesRequested:
+            return .red
+        case .approved:
+            return .green
+        default:
+            return .gitHubOrange
+        }
+    }
+
     var body: some View {
         Button {
             NSWorkspace.shared.open(pr.url)
@@ -76,7 +90,7 @@ struct PRRow: View {
                 Spacer()
 
                 Circle()
-                    .fill(pr.isDraft ? Color.secondary : (pr.reviewDecision == .changesRequested ? Color.red : Color.gitHubOrange))
+                    .fill(statusColor)
                     .frame(width: 8, height: 8)
             }
             .padding(.horizontal, 12)
