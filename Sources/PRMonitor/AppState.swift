@@ -68,6 +68,13 @@ class AppState: ObservableObject {
     }
 
     #if DEBUG
+    func resetNotificationTracking() {
+        notifiedPRIds.removeAll()
+        previousApprovedIds.removeAll()
+        previousChangesRequestedIds.removeAll()
+        isFirstLoad = false
+    }
+
     func sendTestReviewRequestedNotification() {
         NSApp.deactivate()
 

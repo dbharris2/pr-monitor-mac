@@ -118,6 +118,10 @@ struct MenuContent: View {
                     appState.sendTestChangesRequestedNotification()
                 }
             }
+
+            MenuRow(label: "Reset Notification Tracking") {
+                appState.resetNotificationTracking()
+            }
             #endif
 
             MenuRow(label: "Settings...") {
