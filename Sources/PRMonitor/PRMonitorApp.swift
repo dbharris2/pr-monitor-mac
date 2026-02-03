@@ -46,7 +46,7 @@ struct MenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            Image(systemName: "arrow.triangle.pull")
+            Image("MenuBarIcon")
             if count > 0 {
                 Text("\(count)")
                     .font(.caption2)

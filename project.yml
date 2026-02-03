@@ -17,6 +17,7 @@ targets:
     platform: macOS
     sources:
       - path: Sources/PRMonitor
+      - path: Resources/Assets.xcassets
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.prmonitor.app
       INFOPLIST_FILE: Resources/Info.plist
