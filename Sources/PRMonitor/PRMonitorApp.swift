@@ -107,8 +107,13 @@ struct MenuContent: View {
             }
 
             #if DEBUG
-            MenuRow(label: "Test Notification") {
-                appState.sendTestNotification()
+            SubMenuRow(label: "Test Notification") {
+                MenuRow(label: "Review Requested") {
+                    appState.sendTestReviewRequestedNotification()
+                }
+                MenuRow(label: "PR Approved") {
+                    appState.sendTestApprovedNotification()
+                }
             }
             #endif
 
@@ -169,6 +174,51 @@ struct MenuRow: View {
         .buttonStyle(.plain)
         .onHover { hovering in
             isHovered = hovering
+        }
+    }
+}
+
+struct SubMenuRow<Content: View>: View {
+    let label: String
+    @ViewBuilder let content: () -> Content
+
+    @State private var isHovered = false
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(label)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isExpanded ? Color.accentColor : (isHovered ? Color.primary.opacity(0.1) : Color.clear))
+            )
+            .foregroundStyle(isExpanded ? .white : .primary)
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isExpanded.toggle()
+                }
+            }
+            .onHover { hovering in
+                isHovered = hovering
+            }
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 0) {
+                    content()
+                }
+                .padding(.leading, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
     }
 }

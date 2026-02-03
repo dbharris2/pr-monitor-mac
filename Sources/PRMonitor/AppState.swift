@@ -35,6 +35,7 @@ class AppState: ObservableObject {
     private let gitHubService = GitHubService()
     private var pollTimer: Timer?
     private var notifiedPRIds: Set<String> = []
+    private var previousApprovedIds: Set<String> = []
     private var isFirstLoad = true
 
     var needsReviewCount: Int {
@@ -66,11 +67,7 @@ class AppState: ObservableObject {
     }
 
     #if DEBUG
-    func sendTestNotification() {
-        // Clear tracked PRs so next refresh will send real notifications
-        notifiedPRIds.removeAll()
-        isFirstLoad = false
-
+    func sendTestReviewRequestedNotification() {
         NSApp.deactivate()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -79,6 +76,34 @@ class AppState: ObservableObject {
             content.subtitle = "acme/widgets #1234"
             content.body = "feat: Add dark mode support for dashboard"
             content.sound = .default
+
+            if let attachment = Self.createReviewRequestedIconAttachment() {
+                content.attachments = [attachment]
+            }
+
+            let request = UNNotificationRequest(
+                identifier: UUID().uuidString,
+                content: content,
+                trigger: nil
+            )
+
+            UNUserNotificationCenter.current().add(request)
+        }
+    }
+
+    func sendTestApprovedNotification() {
+        NSApp.deactivate()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            let content = UNMutableNotificationContent()
+            content.title = "PR Approved"
+            content.subtitle = "acme/widgets #1234"
+            content.body = "feat: Add dark mode support for dashboard"
+            content.sound = .default
+
+            if let attachment = Self.createApprovedIconAttachment() {
+                content.attachments = [attachment]
+            }
 
             let request = UNNotificationRequest(
                 identifier: UUID().uuidString,
@@ -104,14 +129,21 @@ class AppState: ObservableObject {
             if !isFirstLoad && notificationsEnabled {
                 let newPRs = results.needsReview.filter { !notifiedPRIds.contains($0.id) }
                 if newPRs.count == 1 {
-                    sendNotification(for: newPRs[0])
+                    sendReviewRequestedNotification(for: newPRs[0])
                 } else if newPRs.count > 1 {
                     sendSummaryNotification(count: newPRs.count)
                 }
+
+                // Check for newly approved PRs
+                let newlyApproved = results.approved.filter { !previousApprovedIds.contains($0.id) }
+                for pr in newlyApproved {
+                    sendApprovedNotification(for: pr)
+                }
             }
 
-            // Track all current needsReview PR IDs
+            // Track all current PR IDs
             notifiedPRIds = Set(results.needsReview.map { $0.id })
+            previousApprovedIds = Set(results.approved.map { $0.id })
             isFirstLoad = false
 
             needsReview = results.needsReview
@@ -128,7 +160,7 @@ class AppState: ObservableObject {
         isLoading = false
     }
 
-    private func sendNotification(for pr: PullRequest) {
+    private func sendReviewRequestedNotification(for pr: PullRequest) {
         NSApp.deactivate()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -139,6 +171,10 @@ class AppState: ObservableObject {
             content.sound = .default
             content.userInfo = ["url": pr.url.absoluteString]
 
+            if let attachment = Self.createReviewRequestedIconAttachment() {
+                content.attachments = [attachment]
+            }
+
             let request = UNNotificationRequest(
                 identifier: UUID().uuidString,
                 content: content,
@@ -146,6 +182,95 @@ class AppState: ObservableObject {
             )
 
             UNUserNotificationCenter.current().add(request)
+        }
+    }
+
+    private static func createReviewRequestedIconAttachment() -> UNNotificationAttachment? {
+        guard let image = NSImage(named: "NotificationIcon"),
+              let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return nil
+        }
+
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("review-icon.png")
+        do {
+            try pngData.write(to: tempURL)
+            return try UNNotificationAttachment(identifier: "review-icon", url: tempURL, options: nil)
+        } catch {
+            return nil
+        }
+    }
+
+    private func sendApprovedNotification(for pr: PullRequest) {
+        NSApp.deactivate()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            let content = UNMutableNotificationContent()
+            content.title = "PR Approved"
+            content.body = pr.title
+            content.subtitle = "\(pr.repository) #\(pr.number)"
+            content.sound = .default
+            content.userInfo = ["url": pr.url.absoluteString]
+
+            if let attachment = Self.createApprovedIconAttachment() {
+                content.attachments = [attachment]
+            }
+
+            let request = UNNotificationRequest(
+                identifier: UUID().uuidString,
+                content: content,
+                trigger: nil
+            )
+
+            UNUserNotificationCenter.current().add(request)
+        }
+    }
+
+    private static func createApprovedIconAttachment() -> UNNotificationAttachment? {
+        let size = NSSize(width: 64, height: 64)
+        let image = NSImage(size: size, flipped: false) { rect in
+            NSColor.systemGreen.setFill()
+            NSBezierPath(ovalIn: rect).fill()
+
+            if let checkmark = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil) {
+                let config = NSImage.SymbolConfiguration(pointSize: 32, weight: .bold)
+                let tinted = checkmark.withSymbolConfiguration(config)
+                NSColor.white.set()
+                let checkSize = NSSize(width: 32, height: 32)
+                let checkRect = NSRect(
+                    x: (rect.width - checkSize.width) / 2,
+                    y: (rect.height - checkSize.height) / 2,
+                    width: checkSize.width,
+                    height: checkSize.height
+                )
+                tinted?.draw(in: checkRect, from: .zero, operation: .destinationOver, fraction: 1.0)
+
+                // Draw checkmark in white
+                if let cgImage = tinted?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    let ctx = NSGraphicsContext.current?.cgContext
+                    ctx?.saveGState()
+                    ctx?.clip(to: checkRect, mask: cgImage)
+                    ctx?.setFillColor(NSColor.white.cgColor)
+                    ctx?.fill(checkRect)
+                    ctx?.restoreGState()
+                }
+            }
+            return true
+        }
+
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("approved-icon.png")
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return nil
+        }
+
+        do {
+            try pngData.write(to: tempURL)
+            return try UNNotificationAttachment(identifier: "approved-icon", url: tempURL, options: nil)
+        } catch {
+            return nil
         }
     }
 
