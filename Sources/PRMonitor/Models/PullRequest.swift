@@ -7,6 +7,7 @@ struct PullRequest: Identifiable, Codable, Hashable {
     let url: URL
     let repository: String
     let author: String
+    let authorAvatarURL: URL?
     let createdAt: Date
     let isDraft: Bool
     let reviewDecision: ReviewDecision?

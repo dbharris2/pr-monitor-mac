@@ -192,6 +192,7 @@ class AppState: ObservableObject {
                 url: URL(string: "https://github.com/owner/repo/pull/42")!,
                 repository: "owner/repo",
                 author: "alice",
+                authorAvatarURL: URL(string: "https://avatars.githubusercontent.com/u/1?v=4"),
                 createdAt: Date().addingTimeInterval(-86400),
                 isDraft: false,
                 reviewDecision: nil
@@ -203,6 +204,7 @@ class AppState: ObservableObject {
                 url: URL(string: "https://github.com/owner/other/pull/123")!,
                 repository: "owner/other",
                 author: "bob",
+                authorAvatarURL: URL(string: "https://avatars.githubusercontent.com/u/2?v=4"),
                 createdAt: Date().addingTimeInterval(-3600),
                 isDraft: false,
                 reviewDecision: nil
@@ -216,6 +218,7 @@ class AppState: ObservableObject {
                 url: URL(string: "https://github.com/owner/repo/pull/31")!,
                 repository: "owner/repo",
                 author: "me",
+                authorAvatarURL: URL(string: "https://avatars.githubusercontent.com/u/3?v=4"),
                 createdAt: Date().addingTimeInterval(-7200),
                 isDraft: false,
                 reviewDecision: nil

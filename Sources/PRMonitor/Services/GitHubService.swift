@@ -86,6 +86,7 @@ actor GitHubService {
                 createdAt
                 author {
                   login
+                  avatarUrl(size: 64)
                 }
                 repository {
                   nameWithOwner
@@ -144,6 +145,13 @@ actor GitHubService {
                 reviewDecision = nil
             }
 
+            let authorAvatarURL: URL?
+            if let avatarUrlString = node.author?.avatarUrl {
+                authorAvatarURL = URL(string: avatarUrlString)
+            } else {
+                authorAvatarURL = nil
+            }
+
             return PullRequest(
                 id: id,
                 number: number,
@@ -151,6 +159,7 @@ actor GitHubService {
                 url: url,
                 repository: repository,
                 author: author,
+                authorAvatarURL: authorAvatarURL,
                 createdAt: createdAt,
                 isDraft: node.isDraft ?? false,
                 reviewDecision: reviewDecision
@@ -188,6 +197,7 @@ private struct PRNode: Codable {
 
 private struct Author: Codable {
     let login: String
+    let avatarUrl: String?
 }
 
 private struct Repository: Codable {

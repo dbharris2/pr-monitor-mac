@@ -51,9 +51,17 @@ struct PRRow: View {
             NSWorkspace.shared.open(pr.url)
         } label: {
             HStack(spacing: 8) {
-                Circle()
-                    .fill(pr.isDraft ? Color.secondary : (pr.reviewDecision == .changesRequested ? Color.red : Color.gitHubOrange))
-                    .frame(width: 8, height: 8)
+                AsyncImage(url: pr.authorAvatarURL) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Image(systemName: "person.circle.fill")
+                        .resizable()
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: 24, height: 24)
+                .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(pr.title)
@@ -66,6 +74,10 @@ struct PRRow: View {
                 }
 
                 Spacer()
+
+                Circle()
+                    .fill(pr.isDraft ? Color.secondary : (pr.reviewDecision == .changesRequested ? Color.red : Color.gitHubOrange))
+                    .frame(width: 8, height: 8)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
@@ -91,6 +103,7 @@ struct PRRow: View {
                     url: URL(string: "https://github.com/owner/repo/pull/42")!,
                     repository: "owner/repo",
                     author: "alice",
+                    authorAvatarURL: URL(string: "https://avatars.githubusercontent.com/u/1?v=4"),
                     createdAt: Date(),
                     isDraft: false,
                     reviewDecision: nil
