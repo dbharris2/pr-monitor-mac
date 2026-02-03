@@ -75,8 +75,9 @@ class AppState: ObservableObject {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             let content = UNMutableNotificationContent()
-            content.title = "Test Notification"
-            content.body = "Click Refresh to test real notifications"
+            content.title = "Review Requested"
+            content.subtitle = "acme/widgets #1234"
+            content.body = "feat: Add dark mode support for dashboard"
             content.sound = .default
 
             let request = UNNotificationRequest(
@@ -133,8 +134,8 @@ class AppState: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             let content = UNMutableNotificationContent()
             content.title = "Review Requested"
-            content.body = "#\(String(pr.number)): \(pr.title)"
-            content.subtitle = pr.repository
+            content.body = pr.title
+            content.subtitle = "\(pr.repository) #\(pr.number)"
             content.sound = .default
             content.userInfo = ["url": pr.url.absoluteString]
 
