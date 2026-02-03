@@ -43,14 +43,52 @@ class AppState: ObservableObject {
 
     init() {
         startPolling()
+        observeWake()
         Task {
             await refresh()
         }
     }
 
-    func requestNotificationPermissions() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    private func observeWake() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.refresh()
+            }
+        }
     }
+
+    func requestNotificationPermissions() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+    }
+
+    #if DEBUG
+    func sendTestNotification() {
+        // Clear tracked PRs so next refresh will send real notifications
+        notifiedPRIds.removeAll()
+        isFirstLoad = false
+
+        NSApp.deactivate()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            let content = UNMutableNotificationContent()
+            content.title = "Test Notification"
+            content.body = "Click Refresh to test real notifications"
+            content.sound = .default
+
+            let request = UNNotificationRequest(
+                identifier: UUID().uuidString,
+                content: content,
+                trigger: nil
+            )
+
+            UNUserNotificationCenter.current().add(request)
+        }
+    }
+    #endif
 
     func refresh() async {
         guard !isLoading else { return }
@@ -63,10 +101,11 @@ class AppState: ObservableObject {
 
             // Check for new PRs needing review (skip on first load)
             if !isFirstLoad && notificationsEnabled {
-                for pr in results.needsReview {
-                    if !notifiedPRIds.contains(pr.id) {
-                        sendNotification(for: pr)
-                    }
+                let newPRs = results.needsReview.filter { !notifiedPRIds.contains($0.id) }
+                if newPRs.count == 1 {
+                    sendNotification(for: newPRs[0])
+                } else if newPRs.count > 1 {
+                    sendSummaryNotification(count: newPRs.count)
                 }
             }
 
@@ -89,20 +128,44 @@ class AppState: ObservableObject {
     }
 
     private func sendNotification(for pr: PullRequest) {
-        let content = UNMutableNotificationContent()
-        content.title = "Review Requested"
-        content.body = "#\(pr.number): \(pr.title)"
-        content.subtitle = pr.repository
-        content.sound = .default
-        content.userInfo = ["url": pr.url.absoluteString]
+        NSApp.deactivate()
 
-        let request = UNNotificationRequest(
-            identifier: pr.id,
-            content: content,
-            trigger: nil
-        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            let content = UNMutableNotificationContent()
+            content.title = "Review Requested"
+            content.body = "#\(String(pr.number)): \(pr.title)"
+            content.subtitle = pr.repository
+            content.sound = .default
+            content.userInfo = ["url": pr.url.absoluteString]
 
-        UNUserNotificationCenter.current().add(request)
+            let request = UNNotificationRequest(
+                identifier: UUID().uuidString,
+                content: content,
+                trigger: nil
+            )
+
+            UNUserNotificationCenter.current().add(request)
+        }
+    }
+
+    private func sendSummaryNotification(count: Int) {
+        NSApp.deactivate()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            let content = UNMutableNotificationContent()
+            content.title = "Reviews Requested"
+            content.body = "\(count) PRs need your review"
+            content.sound = .default
+            content.userInfo = ["url": "https://pr-monitor-zeta.vercel.app/"]
+
+            let request = UNNotificationRequest(
+                identifier: UUID().uuidString,
+                content: content,
+                trigger: nil
+            )
+
+            UNUserNotificationCenter.current().add(request)
+        }
     }
 
     func startPolling() {

@@ -1,8 +1,29 @@
 import SwiftUI
+import UserNotifications
+
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound, .badge])
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        if let urlString = response.notification.request.content.userInfo["url"] as? String,
+           let url = URL(string: urlString) {
+            NSWorkspace.shared.open(url)
+        }
+        completionHandler()
+    }
+}
 
 @main
 struct PRMonitorApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppState()
+
 
     var body: some Scene {
         MenuBarExtra {
@@ -78,6 +99,12 @@ struct MenuContent: View {
             MenuRow(label: "Refresh", isLoading: appState.isLoading) {
                 Task { await appState.refresh() }
             }
+
+            #if DEBUG
+            MenuRow(label: "Test Notification") {
+                appState.sendTestNotification()
+            }
+            #endif
 
             MenuRow(label: "Settings...") {
                 NSApp.activate(ignoringOtherApps: true)
