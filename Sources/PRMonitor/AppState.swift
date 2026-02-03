@@ -36,6 +36,7 @@ class AppState: ObservableObject {
     private var pollTimer: Timer?
     private var notifiedPRIds: Set<String> = []
     private var previousApprovedIds: Set<String> = []
+    private var previousChangesRequestedIds: Set<String> = []
     private var isFirstLoad = true
 
     var needsReviewCount: Int {
@@ -72,7 +73,7 @@ class AppState: ObservableObject {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             let content = UNMutableNotificationContent()
-            content.title = "Review Requested"
+            content.title = "Needs my review"
             content.subtitle = "acme/widgets #1234"
             content.body = "feat: Add dark mode support for dashboard"
             content.sound = .default
@@ -96,12 +97,36 @@ class AppState: ObservableObject {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             let content = UNMutableNotificationContent()
-            content.title = "PR Approved"
+            content.title = "Approved"
             content.subtitle = "acme/widgets #1234"
             content.body = "feat: Add dark mode support for dashboard"
             content.sound = .default
 
             if let attachment = Self.createApprovedIconAttachment() {
+                content.attachments = [attachment]
+            }
+
+            let request = UNNotificationRequest(
+                identifier: UUID().uuidString,
+                content: content,
+                trigger: nil
+            )
+
+            UNUserNotificationCenter.current().add(request)
+        }
+    }
+
+    func sendTestChangesRequestedNotification() {
+        NSApp.deactivate()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            let content = UNMutableNotificationContent()
+            content.title = "Returned to me"
+            content.subtitle = "acme/widgets #1234"
+            content.body = "feat: Add dark mode support for dashboard"
+            content.sound = .default
+
+            if let attachment = Self.createChangesRequestedIconAttachment() {
                 content.attachments = [attachment]
             }
 
@@ -139,11 +164,18 @@ class AppState: ObservableObject {
                 for pr in newlyApproved {
                     sendApprovedNotification(for: pr)
                 }
+
+                // Check for PRs with newly requested changes
+                let newlyChangesRequested = results.changesRequested.filter { !previousChangesRequestedIds.contains($0.id) }
+                for pr in newlyChangesRequested {
+                    sendChangesRequestedNotification(for: pr)
+                }
             }
 
             // Track all current PR IDs
             notifiedPRIds = Set(results.needsReview.map { $0.id })
             previousApprovedIds = Set(results.approved.map { $0.id })
+            previousChangesRequestedIds = Set(results.changesRequested.map { $0.id })
             isFirstLoad = false
 
             needsReview = results.needsReview
@@ -165,7 +197,7 @@ class AppState: ObservableObject {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             let content = UNMutableNotificationContent()
-            content.title = "Review Requested"
+            content.title = "Needs my review"
             content.body = pr.title
             content.subtitle = "\(pr.repository) #\(pr.number)"
             content.sound = .default
@@ -186,7 +218,7 @@ class AppState: ObservableObject {
     }
 
     private static func createReviewRequestedIconAttachment() -> UNNotificationAttachment? {
-        guard let image = NSImage(named: "NotificationIcon"),
+        guard let image = NSImage(named: "ReviewRequestedIcon"),
               let tiffData = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiffData),
               let pngData = bitmap.representation(using: .png, properties: [:]) else {
@@ -207,7 +239,7 @@ class AppState: ObservableObject {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             let content = UNMutableNotificationContent()
-            content.title = "PR Approved"
+            content.title = "Approved"
             content.body = pr.title
             content.subtitle = "\(pr.repository) #\(pr.number)"
             content.sound = .default
@@ -274,12 +306,54 @@ class AppState: ObservableObject {
         }
     }
 
+    private func sendChangesRequestedNotification(for pr: PullRequest) {
+        NSApp.deactivate()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            let content = UNMutableNotificationContent()
+            content.title = "Returned to me"
+            content.body = pr.title
+            content.subtitle = "\(pr.repository) #\(pr.number)"
+            content.sound = .default
+            content.userInfo = ["url": pr.url.absoluteString]
+
+            if let attachment = Self.createChangesRequestedIconAttachment() {
+                content.attachments = [attachment]
+            }
+
+            let request = UNNotificationRequest(
+                identifier: UUID().uuidString,
+                content: content,
+                trigger: nil
+            )
+
+            UNUserNotificationCenter.current().add(request)
+        }
+    }
+
+    private static func createChangesRequestedIconAttachment() -> UNNotificationAttachment? {
+        guard let image = NSImage(named: "ChangesRequestedIcon"),
+              let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return nil
+        }
+
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("changes-icon.png")
+        do {
+            try pngData.write(to: tempURL)
+            return try UNNotificationAttachment(identifier: "changes-icon", url: tempURL, options: nil)
+        } catch {
+            return nil
+        }
+    }
+
     private func sendSummaryNotification(count: Int) {
         NSApp.deactivate()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             let content = UNMutableNotificationContent()
-            content.title = "Reviews Requested"
+            content.title = "Need my review"
             content.body = "\(count) PRs need your review"
             content.sound = .default
             content.userInfo = ["url": "https://pr-monitor-zeta.vercel.app/"]

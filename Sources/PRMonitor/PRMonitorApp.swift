@@ -108,11 +108,14 @@ struct MenuContent: View {
 
             #if DEBUG
             SubMenuRow(label: "Test Notification") {
-                MenuRow(label: "Review Requested") {
+                MenuRow(label: "Needs my review") {
                     appState.sendTestReviewRequestedNotification()
                 }
-                MenuRow(label: "PR Approved") {
+                MenuRow(label: "Approved") {
                     appState.sendTestApprovedNotification()
+                }
+                MenuRow(label: "Returned to me") {
+                    appState.sendTestChangesRequestedNotification()
                 }
             }
             #endif
