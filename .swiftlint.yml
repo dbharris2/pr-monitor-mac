@@ -1,0 +1,37 @@
+# SwiftLint Configuration
+
+# Paths to ignore
+excluded:
+  - .build
+  - .sl
+  - DerivedData
+
+# Rules to disable (too pedantic for this project)
+disabled_rules:
+  - identifier_name          # Flags short names like 'pr', 'id', 'x', 'y' which are fine
+  - trailing_comma           # Style preference, not a bug
+  - implicit_optional_initialization  # Common pattern in AppKit/SwiftUI
+
+# Rule configurations
+line_length:
+  warning: 150
+  error: 250
+  ignores_comments: true
+  ignores_urls: true
+  ignores_function_declarations: true
+
+file_length:
+  warning: 500
+  error: 1000
+
+type_body_length:
+  warning: 400
+  error: 500
+
+function_body_length:
+  warning: 60
+  error: 100
+
+# Opt-in rules to enable
+opt_in_rules:
+  - empty_count              # Prefer .isEmpty over .count == 0

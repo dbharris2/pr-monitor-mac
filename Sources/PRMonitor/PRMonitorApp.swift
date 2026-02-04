@@ -25,7 +25,6 @@ struct PRMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppState()
 
-
     var body: some Scene {
         MenuBarExtra {
             MenuContent()
@@ -89,7 +88,7 @@ struct MenuBarLabel: View {
         let totalWidth = iconSize + (items.isEmpty ? 0 : gapAfterIcon + dotsWidth)
         let totalHeight = iconSize
 
-        let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { rect in
+        let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { _ in
             drawIcon(iconSize: iconSize, iconTint: iconTint)
 
             if !items.isEmpty {
@@ -138,7 +137,7 @@ struct MenuBarLabel: View {
         let totalWidth = iconSize + (items.isEmpty ? 0 : gapAfterIcon + numbersWidth)
         let totalHeight = iconSize
 
-        let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { rect in
+        let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { _ in
             drawIcon(iconSize: iconSize, iconTint: iconTint)
 
             if !attributedStrings.isEmpty {
