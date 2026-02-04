@@ -182,7 +182,8 @@ struct MenuContent: View {
             PRSection(
                 title: "Needs my review",
                 prs: appState.needsReview,
-                isExpanded: appState.bindingForSection("needsReview")
+                isExpanded: appState.bindingForSection("needsReview"),
+                statusColorOverride: .gitHubOrange
             )
 
             PRSection(

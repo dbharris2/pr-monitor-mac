@@ -8,6 +8,7 @@ struct PRSection: View {
     let title: String
     let prs: [PullRequest]
     @Binding var isExpanded: Bool
+    var statusColorOverride: Color? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -35,7 +36,7 @@ struct PRSection: View {
 
             if isExpanded && !prs.isEmpty {
                 ForEach(prs) { pr in
-                    PRRow(pr: pr)
+                    PRRow(pr: pr, statusColorOverride: statusColorOverride)
                 }
             }
         }
@@ -44,9 +45,13 @@ struct PRSection: View {
 
 struct PRRow: View {
     let pr: PullRequest
+    var statusColorOverride: Color? = nil
     @State private var isHovered = false
 
     private var statusColor: Color {
+        if let override = statusColorOverride {
+            return override
+        }
         if pr.isDraft {
             return .secondary
         }
