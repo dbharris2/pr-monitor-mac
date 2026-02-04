@@ -75,8 +75,8 @@ struct SettingsView: View {
                     }
 
                 Picker("Menu bar indicator", selection: $appState.menuBarStyle) {
-                    Text("Dots").tag("dots")
-                    Text("Numbers").tag("numbers")
+                    Text("Dots (compact)").tag("dots")
+                    Text("Colored numbers").tag("numbers")
                 }
             } header: {
                 Text("General")

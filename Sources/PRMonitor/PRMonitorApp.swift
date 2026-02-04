@@ -123,7 +123,8 @@ struct MenuBarLabel: View {
                 .font: font,
                 .foregroundColor: color
             ]
-            let str = NSAttributedString(string: "\(count)", attributes: attrs)
+            let displayText = count > 99 ? "99+" : "\(count)"
+            let str = NSAttributedString(string: displayText, attributes: attrs)
             attributedStrings.append((str, color))
             numbersWidth += str.size().width
         }
