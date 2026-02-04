@@ -30,7 +30,11 @@ struct PRMonitorApp: App {
             MenuContent()
                 .environmentObject(appState)
         } label: {
-            MenuBarLabel(count: appState.needsReviewCount)
+            MenuBarLabel(
+                approvedCount: appState.approved.count,
+                needsReviewCount: appState.needsReviewCount,
+                changesRequestedCount: appState.changesRequested.count
+            )
         }
         .menuBarExtraStyle(.window)
 
@@ -42,16 +46,70 @@ struct PRMonitorApp: App {
 }
 
 struct MenuBarLabel: View {
-    let count: Int
+    let approvedCount: Int
+    let needsReviewCount: Int
+    let changesRequestedCount: Int
+
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        HStack(spacing: 2) {
-            Image("MenuBarIcon")
-            if count > 0 {
-                Text("\(count)")
-                    .font(.caption2)
+        Image(nsImage: createMenuBarImage())
+    }
+
+    private func createMenuBarImage() -> NSImage {
+        let iconSize: CGFloat = 18
+        let dotSize: CGFloat = 5
+        let dotSpacing: CGFloat = 1
+        let gapBetweenIconAndDots: CGFloat = 3
+
+        // Calculate which dots to show
+        var dots: [NSColor] = []
+        if approvedCount > 0 { dots.append(NSColor.systemGreen) }
+        if needsReviewCount > 0 { dots.append(NSColor(red: 247/255, green: 129/255, blue: 102/255, alpha: 1)) }
+        if changesRequestedCount > 0 { dots.append(NSColor.systemRed) }
+
+        let dotsWidth = dots.isEmpty ? 0 : dotSize
+        let totalWidth = iconSize + (dots.isEmpty ? 0 : gapBetweenIconAndDots + dotsWidth)
+        let totalHeight = iconSize
+
+        // Determine icon tint based on menu bar appearance
+        let iconTint: NSColor = .white // Menu bar icons are typically white
+
+        let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { rect in
+            // Draw the menu bar icon with tint
+            if let icon = NSImage(named: "MenuBarIcon") {
+                let iconRect = NSRect(x: 0, y: 0, width: iconSize, height: iconSize)
+
+                // Draw icon as mask and fill with tint color
+                if let cgImage = icon.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    let ctx = NSGraphicsContext.current?.cgContext
+                    ctx?.saveGState()
+                    ctx?.clip(to: iconRect, mask: cgImage)
+                    ctx?.setFillColor(iconTint.cgColor)
+                    ctx?.fill(iconRect)
+                    ctx?.restoreGState()
+                }
             }
+
+            // Draw dots vertically stacked
+            if !dots.isEmpty {
+                let dotsX = iconSize + gapBetweenIconAndDots
+                let totalDotsHeight = CGFloat(dots.count) * dotSize + CGFloat(dots.count - 1) * dotSpacing
+                var currentY = (totalHeight - totalDotsHeight) / 2 + totalDotsHeight - dotSize
+
+                for color in dots {
+                    color.setFill()
+                    let dotRect = NSRect(x: dotsX, y: currentY, width: dotSize, height: dotSize)
+                    NSBezierPath(ovalIn: dotRect).fill()
+                    currentY -= (dotSize + dotSpacing)
+                }
+            }
+
+            return true
         }
+
+        image.isTemplate = false
+        return image
     }
 }
 
