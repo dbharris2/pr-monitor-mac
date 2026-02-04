@@ -16,3 +16,14 @@ jobs:
 
       - name: Run SwiftLint
         run: swiftlint --strict
+
+  swiftformat:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SwiftFormat
+        run: brew install swiftformat
+
+      - name: Check formatting
+        run: swiftformat . --lint

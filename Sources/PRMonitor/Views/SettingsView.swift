@@ -1,6 +1,6 @@
-import SwiftUI
-import ServiceManagement
 import KeyboardShortcuts
+import ServiceManagement
+import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState

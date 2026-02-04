@@ -1,17 +1,25 @@
+import MenuBarExtraAccess
 import SwiftUI
 import UserNotifications
-import MenuBarExtraAccess
 
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = self
     }
 
-    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
         completionHandler([.banner, .sound, .badge])
     }
 
-    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
         if let urlString = response.notification.request.content.userInfo["url"] as? String,
            let url = URL(string: urlString) {
             NSWorkspace.shared.open(url)
@@ -64,7 +72,7 @@ struct MenuBarLabel: View {
 
         // Colors for each category
         let greenColor = NSColor.systemGreen
-        let orangeColor = NSColor(red: 247/255, green: 129/255, blue: 102/255, alpha: 1)
+        let orangeColor = NSColor(red: 247 / 255, green: 129 / 255, blue: 102 / 255, alpha: 1)
         let redColor = NSColor.systemRed
 
         // Build items to display (color, count)
@@ -227,21 +235,21 @@ struct MenuContent: View {
             }
 
             #if DEBUG
-            SubMenuRow(label: "Test Notification") {
-                MenuRow(label: "Needs my review") {
-                    appState.sendTestReviewRequestedNotification()
+                SubMenuRow(label: "Test Notification") {
+                    MenuRow(label: "Needs my review") {
+                        appState.sendTestReviewRequestedNotification()
+                    }
+                    MenuRow(label: "Approved") {
+                        appState.sendTestApprovedNotification()
+                    }
+                    MenuRow(label: "Returned to me") {
+                        appState.sendTestChangesRequestedNotification()
+                    }
                 }
-                MenuRow(label: "Approved") {
-                    appState.sendTestApprovedNotification()
-                }
-                MenuRow(label: "Returned to me") {
-                    appState.sendTestChangesRequestedNotification()
-                }
-            }
 
-            MenuRow(label: "Reset Notification Tracking") {
-                appState.resetNotificationTracking()
-            }
+                MenuRow(label: "Reset Notification Tracking") {
+                    appState.resetNotificationTracking()
+                }
             #endif
 
             MenuRow(label: "Settings...") {
@@ -272,7 +280,7 @@ struct MenuContent: View {
 
 struct MenuRow: View {
     let label: String
-    var shortcut: String? = nil
+    var shortcut: String?
     var isLoading: Bool = false
     let action: () -> Void
 

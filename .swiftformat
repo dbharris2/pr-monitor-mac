@@ -1,0 +1,24 @@
+# SwiftFormat Configuration
+
+# File options
+--exclude .build,.sl,DerivedData
+
+# Format options
+--indent 4
+--indentcase false
+--trimwhitespace always
+--voidtype void
+--semicolons never
+--commas always
+--stripunusedargs closure-only
+
+# Wrapping
+--maxwidth 150
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+
+# Rules to disable
+--disable redundantSelf
+--disable trailingCommas
+--disable wrapMultilineStatementBraces

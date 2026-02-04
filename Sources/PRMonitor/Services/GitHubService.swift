@@ -12,13 +12,13 @@ actor GitHubService {
         var errorDescription: String? {
             switch self {
             case .noToken:
-                return "No GitHub token configured. Add your token in Settings."
-            case .invalidResponse(let statusCode):
-                return "GitHub API returned status \(statusCode)"
-            case .apiError(let message):
-                return "GitHub API error: \(message)"
-            case .decodingError(let message):
-                return "Failed to parse response: \(message)"
+                "No GitHub token configured. Add your token in Settings."
+            case let .invalidResponse(statusCode):
+                "GitHub API returned status \(statusCode)"
+            case let .apiError(message):
+                "GitHub API error: \(message)"
+            case let .decodingError(message):
+                "Failed to parse response: \(message)"
             }
         }
     }
@@ -138,18 +138,16 @@ actor GitHubService {
                 return nil
             }
 
-            let reviewDecision: PullRequest.ReviewDecision?
-            if let decision = node.reviewDecision {
-                reviewDecision = PullRequest.ReviewDecision(rawValue: decision)
+            let reviewDecision: PullRequest.ReviewDecision? = if let decision = node.reviewDecision {
+                PullRequest.ReviewDecision(rawValue: decision)
             } else {
-                reviewDecision = nil
+                nil
             }
 
-            let authorAvatarURL: URL?
-            if let avatarUrlString = node.author?.avatarUrl {
-                authorAvatarURL = URL(string: avatarUrlString)
+            let authorAvatarURL: URL? = if let avatarUrlString = node.author?.avatarUrl {
+                URL(string: avatarUrlString)
             } else {
-                authorAvatarURL = nil
+                nil
             }
 
             return PullRequest(

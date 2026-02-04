@@ -1,14 +1,14 @@
 import SwiftUI
 
 extension Color {
-    static let gitHubOrange = Color(red: 247/255, green: 129/255, blue: 102/255)
+    static let gitHubOrange = Color(red: 247 / 255, green: 129 / 255, blue: 102 / 255)
 }
 
 struct PRSection: View {
     let title: String
     let prs: [PullRequest]
     @Binding var isExpanded: Bool
-    var statusColorOverride: Color? = nil
+    var statusColorOverride: Color?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -34,7 +34,7 @@ struct PRSection: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
 
-            if isExpanded && !prs.isEmpty {
+            if isExpanded, !prs.isEmpty {
                 ForEach(prs) { pr in
                     PRRow(pr: pr, statusColorOverride: statusColorOverride)
                 }
@@ -45,7 +45,7 @@ struct PRSection: View {
 
 struct PRRow: View {
     let pr: PullRequest
-    var statusColorOverride: Color? = nil
+    var statusColorOverride: Color?
     @State private var isHovered = false
 
     private var statusColor: Color {

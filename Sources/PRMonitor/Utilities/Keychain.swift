@@ -1,6 +1,6 @@
 import Foundation
 
-// Using UserDefaults for development. Switch to Keychain for production release.
+/// Using UserDefaults for development. Switch to Keychain for production release.
 enum Keychain {
     private static let tokenKey = "github-token"
 

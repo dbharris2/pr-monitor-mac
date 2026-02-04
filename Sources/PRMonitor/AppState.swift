@@ -1,7 +1,7 @@
-import SwiftUI
 import Combine
-import UserNotifications
 import KeyboardShortcuts
+import SwiftUI
+import UserNotifications
 
 @MainActor
 class AppState: ObservableObject {
@@ -80,84 +80,84 @@ class AppState: ObservableObject {
     }
 
     #if DEBUG
-    func resetNotificationTracking() {
-        notifiedPRIds.removeAll()
-        previousApprovedIds.removeAll()
-        previousChangesRequestedIds.removeAll()
-        isFirstLoad = false
-    }
-
-    func sendTestReviewRequestedNotification() {
-        NSApp.deactivate()
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            let content = UNMutableNotificationContent()
-            content.title = "Needs my review"
-            content.subtitle = "acme/widgets #1234"
-            content.body = "feat: Add dark mode support for dashboard"
-            content.sound = .default
-
-            if let attachment = Self.createReviewRequestedIconAttachment() {
-                content.attachments = [attachment]
-            }
-
-            let request = UNNotificationRequest(
-                identifier: UUID().uuidString,
-                content: content,
-                trigger: nil
-            )
-
-            UNUserNotificationCenter.current().add(request)
+        func resetNotificationTracking() {
+            notifiedPRIds.removeAll()
+            previousApprovedIds.removeAll()
+            previousChangesRequestedIds.removeAll()
+            isFirstLoad = false
         }
-    }
 
-    func sendTestApprovedNotification() {
-        NSApp.deactivate()
+        func sendTestReviewRequestedNotification() {
+            NSApp.deactivate()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            let content = UNMutableNotificationContent()
-            content.title = "Approved"
-            content.subtitle = "acme/widgets #1234"
-            content.body = "feat: Add dark mode support for dashboard"
-            content.sound = .default
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                let content = UNMutableNotificationContent()
+                content.title = "Needs my review"
+                content.subtitle = "acme/widgets #1234"
+                content.body = "feat: Add dark mode support for dashboard"
+                content.sound = .default
 
-            if let attachment = Self.createApprovedIconAttachment() {
-                content.attachments = [attachment]
+                if let attachment = Self.createReviewRequestedIconAttachment() {
+                    content.attachments = [attachment]
+                }
+
+                let request = UNNotificationRequest(
+                    identifier: UUID().uuidString,
+                    content: content,
+                    trigger: nil
+                )
+
+                UNUserNotificationCenter.current().add(request)
             }
-
-            let request = UNNotificationRequest(
-                identifier: UUID().uuidString,
-                content: content,
-                trigger: nil
-            )
-
-            UNUserNotificationCenter.current().add(request)
         }
-    }
 
-    func sendTestChangesRequestedNotification() {
-        NSApp.deactivate()
+        func sendTestApprovedNotification() {
+            NSApp.deactivate()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            let content = UNMutableNotificationContent()
-            content.title = "Returned to me"
-            content.subtitle = "acme/widgets #1234"
-            content.body = "feat: Add dark mode support for dashboard"
-            content.sound = .default
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                let content = UNMutableNotificationContent()
+                content.title = "Approved"
+                content.subtitle = "acme/widgets #1234"
+                content.body = "feat: Add dark mode support for dashboard"
+                content.sound = .default
 
-            if let attachment = Self.createChangesRequestedIconAttachment() {
-                content.attachments = [attachment]
+                if let attachment = Self.createApprovedIconAttachment() {
+                    content.attachments = [attachment]
+                }
+
+                let request = UNNotificationRequest(
+                    identifier: UUID().uuidString,
+                    content: content,
+                    trigger: nil
+                )
+
+                UNUserNotificationCenter.current().add(request)
             }
-
-            let request = UNNotificationRequest(
-                identifier: UUID().uuidString,
-                content: content,
-                trigger: nil
-            )
-
-            UNUserNotificationCenter.current().add(request)
         }
-    }
+
+        func sendTestChangesRequestedNotification() {
+            NSApp.deactivate()
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                let content = UNMutableNotificationContent()
+                content.title = "Returned to me"
+                content.subtitle = "acme/widgets #1234"
+                content.body = "feat: Add dark mode support for dashboard"
+                content.sound = .default
+
+                if let attachment = Self.createChangesRequestedIconAttachment() {
+                    content.attachments = [attachment]
+                }
+
+                let request = UNNotificationRequest(
+                    identifier: UUID().uuidString,
+                    content: content,
+                    trigger: nil
+                )
+
+                UNUserNotificationCenter.current().add(request)
+            }
+        }
     #endif
 
     func refresh() async {
@@ -170,7 +170,7 @@ class AppState: ObservableObject {
             let results = try await gitHubService.fetchAllPRs()
 
             // Check for new PRs needing review (skip on first load)
-            if !isFirstLoad && notificationsEnabled {
+            if !isFirstLoad, notificationsEnabled {
                 let newPRs = results.needsReview.filter { !notifiedPRIds.contains($0.id) }
                 if newPRs.count == 1 {
                     sendReviewRequestedNotification(for: newPRs[0])
@@ -192,9 +192,9 @@ class AppState: ObservableObject {
             }
 
             // Track all current PR IDs
-            notifiedPRIds = Set(results.needsReview.map { $0.id })
-            previousApprovedIds = Set(results.approved.map { $0.id })
-            previousChangesRequestedIds = Set(results.changesRequested.map { $0.id })
+            notifiedPRIds = Set(results.needsReview.map(\.id))
+            previousApprovedIds = Set(results.approved.map(\.id))
+            previousChangesRequestedIds = Set(results.changesRequested.map(\.id))
             isFirstLoad = false
 
             needsReview = results.needsReview
