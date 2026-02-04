@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# Pre-commit hook for PR Monitor
+# Runs SwiftLint and SwiftFormat checks
+
+set -e
+
+echo "Running pre-commit checks..."
+
+# Check if SwiftFormat is installed
+if command -v swiftformat &> /dev/null; then
+    echo "→ Checking SwiftFormat..."
+    if ! swiftformat . --lint --quiet; then
+        echo "❌ SwiftFormat check failed. Run 'swiftformat .' to fix."
+        exit 1
+    fi
+    echo "✓ SwiftFormat passed"
+else
+    echo "⚠ SwiftFormat not installed, skipping"
+fi
+
+# Check if SwiftLint is installed
+if command -v swiftlint &> /dev/null; then
+    echo "→ Checking SwiftLint..."
+    if ! swiftlint --quiet; then
+        echo "❌ SwiftLint check failed. Run 'swiftlint' to see issues."
+        exit 1
+    fi
+    echo "✓ SwiftLint passed"
+else
+    echo "⚠ SwiftLint not installed, skipping"
+fi
+
+echo "✅ All checks passed!"

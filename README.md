@@ -62,3 +62,33 @@ Choose between compact dots or colored numbers in Settings.
 - **Notifications** - Get notified when you receive new review requests, approvals, or change requests
 - **Launch at login** - Start monitoring automatically when you log in
 - **Configurable refresh interval** - Poll every 1, 5, 15, or 30 minutes
+- **Global keyboard shortcut** - Toggle the menu from anywhere (default: ⌘⇧P)
+
+## Development
+
+### Linting & Formatting
+
+```bash
+# Install tools
+brew install swiftlint swiftformat
+
+# Run checks
+swiftlint              # Check for lint issues
+swiftformat . --lint   # Check formatting
+
+# Auto-fix
+swiftlint --fix        # Fix lint issues
+swiftformat .          # Format code
+```
+
+### Pre-commit Hook
+
+To run checks automatically before each commit:
+
+```bash
+# For Sapling
+echo -e "\n[hooks]\npre-commit = ./scripts/pre-commit" >> .sl/config
+
+# For Git
+ln -s ../../scripts/pre-commit .git/hooks/pre-commit
+```
