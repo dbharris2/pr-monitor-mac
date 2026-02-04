@@ -38,3 +38,20 @@ targets:
     dependencies:
       - package: KeyboardShortcuts
       - package: MenuBarExtraAccess
+    preBuildScripts:
+      - name: SwiftLint
+        basedOnDependencyAnalysis: false
+        script: |
+          if command -v swiftlint &> /dev/null; then
+            swiftlint --fix && swiftlint
+          else
+            echo "warning: SwiftLint not installed, install via 'brew install swiftlint'"
+          fi
+      - name: SwiftFormat
+        basedOnDependencyAnalysis: false
+        script: |
+          if command -v swiftformat &> /dev/null; then
+            swiftformat . --lint
+          else
+            echo "warning: SwiftFormat not installed, install via 'brew install swiftformat'"
+          fi

@@ -2,33 +2,42 @@
 
 # Pre-commit hook for PR Monitor
 # Runs SwiftLint and SwiftFormat checks
+# Uses Mint for version-locked tools if available, falls back to Homebrew
 
 set -e
 
 echo "Running pre-commit checks..."
 
-# Check if SwiftFormat is installed
-if command -v swiftformat &> /dev/null; then
-    echo "→ Checking SwiftFormat..."
-    if ! swiftformat . --lint --quiet; then
-        echo "❌ SwiftFormat check failed. Run 'swiftformat .' to fix."
-        exit 1
+# Helper to run a tool via mint (preferred) or direct
+run_tool() {
+    local tool=$1
+    shift
+    if command -v mint &> /dev/null; then
+        mint run $tool "$@"
+    elif command -v $tool &> /dev/null; then
+        $tool "$@"
+    else
+        echo "⚠ $tool not installed. Install via 'brew install mint && mint bootstrap' or 'brew install $tool'"
+        return 1
     fi
+}
+
+# Check SwiftFormat
+echo "→ Checking SwiftFormat..."
+if run_tool swiftformat . --lint --quiet 2>/dev/null; then
     echo "✓ SwiftFormat passed"
 else
-    echo "⚠ SwiftFormat not installed, skipping"
+    echo "❌ SwiftFormat check failed. Run 'swiftformat .' to fix."
+    exit 1
 fi
 
-# Check if SwiftLint is installed
-if command -v swiftlint &> /dev/null; then
-    echo "→ Checking SwiftLint..."
-    if ! swiftlint --quiet; then
-        echo "❌ SwiftLint check failed. Run 'swiftlint' to see issues."
-        exit 1
-    fi
+# Check SwiftLint
+echo "→ Checking SwiftLint..."
+if run_tool swiftlint --quiet 2>/dev/null; then
     echo "✓ SwiftLint passed"
 else
-    echo "⚠ SwiftLint not installed, skipping"
+    echo "❌ SwiftLint check failed. Run 'swiftlint' to see issues."
+    exit 1
 fi
 
 echo "✅ All checks passed!"

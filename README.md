@@ -69,16 +69,22 @@ Choose between compact dots or colored numbers in Settings.
 ### Linting & Formatting
 
 ```bash
-# Install tools
-brew install swiftlint swiftformat
+# Install tools (version-locked via Mintfile)
+brew install mint
+mint bootstrap
 
 # Run checks
-swiftlint              # Check for lint issues
-swiftformat . --lint   # Check formatting
+mint run swiftlint              # Check for lint issues
+mint run swiftformat . --lint   # Check formatting
 
 # Auto-fix
-swiftlint --fix        # Fix lint issues
-swiftformat .          # Format code
+mint run swiftlint --fix        # Fix lint issues
+mint run swiftformat .          # Format code
+```
+
+Alternatively, install directly via Homebrew (versions may vary):
+```bash
+brew install swiftlint swiftformat
 ```
 
 ### Pre-commit Hook
