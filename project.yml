@@ -11,6 +11,14 @@ settings:
   SWIFT_VERSION: "5.9"
   ENABLE_USER_SCRIPT_SANDBOXING: false
 
+packages:
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: 2.0.0
+  MenuBarExtraAccess:
+    url: https://github.com/orchetect/MenuBarExtraAccess
+    from: 1.0.0
+
 targets:
   PRMonitor:
     type: application
@@ -27,3 +35,6 @@ targets:
       CODE_SIGN_IDENTITY: "-"
     entitlements:
       path: Resources/PRMonitor.entitlements
+    dependencies:
+      - package: KeyboardShortcuts
+      - package: MenuBarExtraAccess

@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import UserNotifications
+import KeyboardShortcuts
 
 @MainActor
 class AppState: ObservableObject {
@@ -13,6 +14,7 @@ class AppState: ObservableObject {
     @Published var isLoading = false
     @Published var lastUpdated: Date?
     @Published var error: String?
+    @Published var isMenuPresented = false
 
     @Published var expandedSections: [String: Bool] = [
         "needsReview": true,
@@ -47,8 +49,17 @@ class AppState: ObservableObject {
     init() {
         startPolling()
         observeWake()
+        setupKeyboardShortcut()
         Task {
             await refresh()
+        }
+    }
+
+    private func setupKeyboardShortcut() {
+        KeyboardShortcuts.onKeyUp(for: .toggleMenuBar) { [weak self] in
+            Task { @MainActor in
+                self?.isMenuPresented.toggle()
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 import SwiftUI
 import ServiceManagement
+import KeyboardShortcuts
 
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
@@ -78,12 +79,14 @@ struct SettingsView: View {
                     Text("Dots (compact)").tag("dots")
                     Text("Colored numbers").tag("numbers")
                 }
+
+                KeyboardShortcuts.Recorder("Global shortcut:", name: .toggleMenuBar)
             } header: {
                 Text("General")
             }
         }
         .formStyle(.grouped)
-        .frame(width: 400, height: 320)
+        .frame(width: 400, height: 360)
         .onAppear {
             if let existingToken = Keychain.getToken() {
                 token = existingToken

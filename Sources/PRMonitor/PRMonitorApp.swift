@@ -1,5 +1,6 @@
 import SwiftUI
 import UserNotifications
+import MenuBarExtraAccess
 
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -38,6 +39,7 @@ struct PRMonitorApp: App {
             )
         }
         .menuBarExtraStyle(.window)
+        .menuBarExtraAccess(isPresented: $appState.isMenuPresented)
 
         Settings {
             SettingsView()
