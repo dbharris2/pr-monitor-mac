@@ -39,9 +39,26 @@ open PRMonitor.xcodeproj
 
 ## Features
 
-- **Needs your review** - PRs where you're a requested reviewer
-- **Waiting for reviewers** - PRs you authored awaiting review
-- **Approved** - PRs you authored that are approved
-- **Reviewed** - PRs you've reviewed or PRs with changes requested
+### Menu Bar Status Indicators
 
-PRs with "changes requested" status show a red dot; others show orange.
+The menu bar icon shows colored indicators for at-a-glance PR status:
+
+- 🟢 **Green** - Your PRs that are approved and ready to merge
+- 🟠 **Orange** - PRs that need your review
+- 🔴 **Red** - Your PRs returned with changes requested
+
+Choose between compact dots or colored numbers in Settings.
+
+### PR Categories
+
+- **Needs my review** - PRs where you're a requested reviewer
+- **Waiting for review** - PRs you authored awaiting review
+- **Approved** - PRs you authored that are approved
+- **Returned to me** - Your PRs with changes requested
+- **Reviewed** - PRs you've reviewed
+
+### Other Features
+
+- **Notifications** - Get notified when you receive new review requests, approvals, or change requests
+- **Launch at login** - Start monitoring automatically when you log in
+- **Configurable refresh interval** - Poll every 1, 5, 15, or 30 minutes
