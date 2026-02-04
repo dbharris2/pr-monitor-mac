@@ -31,6 +31,7 @@ class AppState: ObservableObject {
 
     @AppStorage("pollInterval") var pollInterval: TimeInterval = 300 // 5 minutes
     @AppStorage("notificationsEnabled") var notificationsEnabled: Bool = false
+    @AppStorage("menuBarStyle") var menuBarStyle: String = "dots" // "dots" or "numbers"
 
     private let gitHubService = GitHubService()
     private var pollTimer: Timer?

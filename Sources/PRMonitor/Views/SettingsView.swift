@@ -73,6 +73,11 @@ struct SettingsView: View {
                             appState.requestNotificationPermissions()
                         }
                     }
+
+                Picker("Menu bar indicator", selection: $appState.menuBarStyle) {
+                    Text("Dots").tag("dots")
+                    Text("Numbers").tag("numbers")
+                }
             } header: {
                 Text("General")
             }

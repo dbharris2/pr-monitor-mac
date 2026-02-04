@@ -33,7 +33,8 @@ struct PRMonitorApp: App {
             MenuBarLabel(
                 approvedCount: appState.approved.count,
                 needsReviewCount: appState.needsReviewCount,
-                changesRequestedCount: appState.changesRequested.count
+                changesRequestedCount: appState.changesRequested.count,
+                style: appState.menuBarStyle
             )
         }
         .menuBarExtraStyle(.window)
@@ -49,8 +50,7 @@ struct MenuBarLabel: View {
     let approvedCount: Int
     let needsReviewCount: Int
     let changesRequestedCount: Int
-
-    @Environment(\.colorScheme) var colorScheme
+    let style: String
 
     var body: some View {
         Image(nsImage: createMenuBarImage())
@@ -58,46 +58,44 @@ struct MenuBarLabel: View {
 
     private func createMenuBarImage() -> NSImage {
         let iconSize: CGFloat = 18
+        let gapAfterIcon: CGFloat = 3
+        let iconTint: NSColor = .white
+
+        // Colors for each category
+        let greenColor = NSColor.systemGreen
+        let orangeColor = NSColor(red: 247/255, green: 129/255, blue: 102/255, alpha: 1)
+        let redColor = NSColor.systemRed
+
+        // Build items to display (color, count)
+        var items: [(NSColor, Int)] = []
+        if approvedCount > 0 { items.append((greenColor, approvedCount)) }
+        if needsReviewCount > 0 { items.append((orangeColor, needsReviewCount)) }
+        if changesRequestedCount > 0 { items.append((redColor, changesRequestedCount)) }
+
+        if style == "numbers" {
+            return createNumbersImage(iconSize: iconSize, gapAfterIcon: gapAfterIcon, iconTint: iconTint, items: items)
+        } else {
+            return createDotsImage(iconSize: iconSize, gapAfterIcon: gapAfterIcon, iconTint: iconTint, items: items)
+        }
+    }
+
+    private func createDotsImage(iconSize: CGFloat, gapAfterIcon: CGFloat, iconTint: NSColor, items: [(NSColor, Int)]) -> NSImage {
         let dotSize: CGFloat = 5
         let dotSpacing: CGFloat = 1
-        let gapBetweenIconAndDots: CGFloat = 3
 
-        // Calculate which dots to show
-        var dots: [NSColor] = []
-        if approvedCount > 0 { dots.append(NSColor.systemGreen) }
-        if needsReviewCount > 0 { dots.append(NSColor(red: 247/255, green: 129/255, blue: 102/255, alpha: 1)) }
-        if changesRequestedCount > 0 { dots.append(NSColor.systemRed) }
-
-        let dotsWidth = dots.isEmpty ? 0 : dotSize
-        let totalWidth = iconSize + (dots.isEmpty ? 0 : gapBetweenIconAndDots + dotsWidth)
+        let dotsWidth = items.isEmpty ? 0 : dotSize
+        let totalWidth = iconSize + (items.isEmpty ? 0 : gapAfterIcon + dotsWidth)
         let totalHeight = iconSize
 
-        // Determine icon tint based on menu bar appearance
-        let iconTint: NSColor = .white // Menu bar icons are typically white
-
         let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { rect in
-            // Draw the menu bar icon with tint
-            if let icon = NSImage(named: "MenuBarIcon") {
-                let iconRect = NSRect(x: 0, y: 0, width: iconSize, height: iconSize)
+            drawIcon(iconSize: iconSize, iconTint: iconTint)
 
-                // Draw icon as mask and fill with tint color
-                if let cgImage = icon.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                    let ctx = NSGraphicsContext.current?.cgContext
-                    ctx?.saveGState()
-                    ctx?.clip(to: iconRect, mask: cgImage)
-                    ctx?.setFillColor(iconTint.cgColor)
-                    ctx?.fill(iconRect)
-                    ctx?.restoreGState()
-                }
-            }
-
-            // Draw dots vertically stacked
-            if !dots.isEmpty {
-                let dotsX = iconSize + gapBetweenIconAndDots
-                let totalDotsHeight = CGFloat(dots.count) * dotSize + CGFloat(dots.count - 1) * dotSpacing
+            if !items.isEmpty {
+                let dotsX = iconSize + gapAfterIcon
+                let totalDotsHeight = CGFloat(items.count) * dotSize + CGFloat(items.count - 1) * dotSpacing
                 var currentY = (totalHeight - totalDotsHeight) / 2 + totalDotsHeight - dotSize
 
-                for color in dots {
+                for (color, _) in items {
                     color.setFill()
                     let dotRect = NSRect(x: dotsX, y: currentY, width: dotSize, height: dotSize)
                     NSBezierPath(ovalIn: dotRect).fill()
@@ -110,6 +108,67 @@ struct MenuBarLabel: View {
 
         image.isTemplate = false
         return image
+    }
+
+    private func createNumbersImage(iconSize: CGFloat, gapAfterIcon: CGFloat, iconTint: NSColor, items: [(NSColor, Int)]) -> NSImage {
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium)
+        let numberSpacing: CGFloat = 3
+
+        // Calculate width needed for numbers
+        var numbersWidth: CGFloat = 0
+        var attributedStrings: [(NSAttributedString, NSColor)] = []
+
+        for (color, count) in items {
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: color
+            ]
+            let str = NSAttributedString(string: "\(count)", attributes: attrs)
+            attributedStrings.append((str, color))
+            numbersWidth += str.size().width
+        }
+
+        if !items.isEmpty {
+            numbersWidth += CGFloat(items.count - 1) * numberSpacing
+        }
+
+        let totalWidth = iconSize + (items.isEmpty ? 0 : gapAfterIcon + numbersWidth)
+        let totalHeight = iconSize
+
+        let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { rect in
+            drawIcon(iconSize: iconSize, iconTint: iconTint)
+
+            if !attributedStrings.isEmpty {
+                var currentX = iconSize + gapAfterIcon
+
+                for (str, _) in attributedStrings {
+                    let size = str.size()
+                    let y = (totalHeight - size.height) / 2
+                    str.draw(at: NSPoint(x: currentX, y: y))
+                    currentX += size.width + numberSpacing
+                }
+            }
+
+            return true
+        }
+
+        image.isTemplate = false
+        return image
+    }
+
+    private func drawIcon(iconSize: CGFloat, iconTint: NSColor) {
+        if let icon = NSImage(named: "MenuBarIcon") {
+            let iconRect = NSRect(x: 0, y: 0, width: iconSize, height: iconSize)
+
+            if let cgImage = icon.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                let ctx = NSGraphicsContext.current?.cgContext
+                ctx?.saveGState()
+                ctx?.clip(to: iconRect, mask: cgImage)
+                ctx?.setFillColor(iconTint.cgColor)
+                ctx?.fill(iconRect)
+                ctx?.restoreGState()
+            }
+        }
     }
 }
 
