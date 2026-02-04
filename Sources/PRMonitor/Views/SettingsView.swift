@@ -67,7 +67,7 @@ struct SettingsView: View {
                         setLaunchAtLogin(newValue)
                     }
 
-                Toggle("Notifications for new review requests", isOn: $appState.notificationsEnabled)
+                Toggle("Notifications", isOn: $appState.notificationsEnabled)
                     .onChange(of: appState.notificationsEnabled) { _, newValue in
                         if newValue {
                             appState.requestNotificationPermissions()
