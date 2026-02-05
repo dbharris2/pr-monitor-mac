@@ -25,4 +25,5 @@ struct PRFetchResults {
     var approved: [PullRequest] = []
     var changesRequested: [PullRequest] = []
     var myChangesRequested: [PullRequest] = []
+    var drafts: [PullRequest] = []
 }

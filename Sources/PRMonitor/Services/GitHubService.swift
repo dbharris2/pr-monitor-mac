@@ -57,7 +57,7 @@ actor GitHubService: GitHubServiceProtocol {
         // PRs I authored
         for pr in authoredPRs {
             if pr.isDraft {
-                continue
+                results.drafts.append(pr)
             } else if pr.reviewDecision == .approved {
                 results.approved.append(pr)
             } else if pr.reviewDecision == .changesRequested {

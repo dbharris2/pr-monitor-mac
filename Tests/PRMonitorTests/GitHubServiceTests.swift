@@ -214,6 +214,10 @@ final class GitHubServiceTests: XCTestCase {
         XCTAssertEqual(results.changesRequested.count, 0)
         XCTAssertEqual(results.waitingForReviewers.count, 1)
         XCTAssertEqual(results.waitingForReviewers.first?.id, "pr-nondraft")
+
+        // Draft should appear in drafts
+        XCTAssertEqual(results.drafts.count, 1)
+        XCTAssertEqual(results.drafts.first?.id, "pr-draft")
     }
 
     // MARK: Dedup in myChangesRequested

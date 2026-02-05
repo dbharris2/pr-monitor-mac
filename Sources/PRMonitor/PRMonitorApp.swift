@@ -220,6 +220,12 @@ struct MenuContent: View {
                 isExpanded: appState.bindingForSection("myChangesRequested")
             )
 
+            PRSection(
+                title: "Drafts",
+                prs: appState.drafts,
+                isExpanded: appState.bindingForSection("drafts")
+            )
+
             Divider()
                 .padding(.vertical, 4)
 

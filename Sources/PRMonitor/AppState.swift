@@ -10,6 +10,7 @@ class AppState: ObservableObject {
     @Published var approved: [PullRequest] = []
     @Published var changesRequested: [PullRequest] = []
     @Published var myChangesRequested: [PullRequest] = []
+    @Published var drafts: [PullRequest] = []
 
     @Published var isLoading = false
     @Published var lastUpdated: Date?
@@ -21,7 +22,8 @@ class AppState: ObservableObject {
         "waitingForReviewers": true,
         "approved": false,
         "changesRequested": true,
-        "myChangesRequested": true
+        "myChangesRequested": true,
+        "drafts": false
     ]
 
     func bindingForSection(_ key: String) -> Binding<Bool> {
@@ -204,6 +206,7 @@ class AppState: ObservableObject {
             approved = results.approved
             changesRequested = results.changesRequested
             myChangesRequested = results.myChangesRequested
+            drafts = results.drafts
 
             lastUpdated = Date()
         } catch {

@@ -78,6 +78,7 @@ final class AppStateTests: XCTestCase {
         results.approved = [makePR(id: "app-1")]
         results.changesRequested = [makePR(id: "cr-1")]
         results.myChangesRequested = [makePR(id: "mcr-1")]
+        results.drafts = [makePR(id: "d-1")]
 
         await mockService.configure(result: results)
         await appState.refresh()
@@ -96,6 +97,9 @@ final class AppStateTests: XCTestCase {
 
         XCTAssertEqual(appState.myChangesRequested.count, 1)
         XCTAssertEqual(appState.myChangesRequested.first?.id, "mcr-1")
+
+        XCTAssertEqual(appState.drafts.count, 1)
+        XCTAssertEqual(appState.drafts.first?.id, "d-1")
     }
 
     // MARK: refresh() sets lastUpdated
