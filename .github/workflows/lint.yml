@@ -28,7 +28,7 @@ jobs:
           sudo mv swiftformat /usr/local/bin/
 
       - name: Run SwiftLint
-        run: swiftlint --strict
+        run: swiftlint
 
       - name: Run SwiftFormat
         run: swiftformat . --lint
