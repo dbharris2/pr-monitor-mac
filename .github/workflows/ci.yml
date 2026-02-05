@@ -46,3 +46,6 @@ jobs:
 
       - name: Build
         run: xcodebuild -scheme PRMonitor -configuration Debug build
+
+      - name: Test
+        run: xcodebuild -scheme PRMonitor -configuration Debug -destination 'platform=macOS' test

@@ -35,6 +35,10 @@ lint:
     swiftformat . --lint
     swiftlint
 
+# Run unit tests
+test: generate
+    xcodebuild -scheme PRMonitor -configuration Debug -destination 'platform=macOS' test
+
 # Clean build artifacts
 clean:
     xcodebuild -scheme PRMonitor -configuration Debug clean
