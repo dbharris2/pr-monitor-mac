@@ -11,6 +11,10 @@ struct PullRequest: Identifiable, Codable, Hashable {
     let createdAt: Date
     let isDraft: Bool
     let reviewDecision: ReviewDecision?
+    let additions: Int
+    let deletions: Int
+    let changedFiles: Int
+    let totalComments: Int
 
     enum ReviewDecision: String, Codable {
         case approved = "APPROVED"

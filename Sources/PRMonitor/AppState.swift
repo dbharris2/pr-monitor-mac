@@ -419,7 +419,11 @@ class AppState: ObservableObject {
                 authorAvatarURL: URL(string: "https://avatars.githubusercontent.com/u/1?v=4"),
                 createdAt: Date().addingTimeInterval(-86400),
                 isDraft: false,
-                reviewDecision: nil
+                reviewDecision: nil,
+                additions: 250,
+                deletions: 40,
+                changedFiles: 8,
+                totalComments: 5
             ),
             PullRequest(
                 id: "2",
@@ -431,7 +435,11 @@ class AppState: ObservableObject {
                 authorAvatarURL: URL(string: "https://avatars.githubusercontent.com/u/2?v=4"),
                 createdAt: Date().addingTimeInterval(-3600),
                 isDraft: false,
-                reviewDecision: nil
+                reviewDecision: nil,
+                additions: 12,
+                deletions: 3,
+                changedFiles: 2,
+                totalComments: 0
             )
         ]
         state.waitingForReviewers = [
@@ -445,7 +453,11 @@ class AppState: ObservableObject {
                 authorAvatarURL: URL(string: "https://avatars.githubusercontent.com/u/3?v=4"),
                 createdAt: Date().addingTimeInterval(-7200),
                 isDraft: false,
-                reviewDecision: nil
+                reviewDecision: nil,
+                additions: 88,
+                deletions: 15,
+                changedFiles: 4,
+                totalComments: 2
             )
         ]
         state.lastUpdated = Date()

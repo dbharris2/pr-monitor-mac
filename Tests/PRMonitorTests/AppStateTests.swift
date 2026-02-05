@@ -46,7 +46,11 @@ private func makePR(
         authorAvatarURL: nil,
         createdAt: Date(),
         isDraft: false,
-        reviewDecision: reviewDecision
+        reviewDecision: reviewDecision,
+        additions: 0,
+        deletions: 0,
+        changedFiles: 0,
+        totalComments: 0
     )
 }
 

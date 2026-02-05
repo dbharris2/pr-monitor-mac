@@ -88,9 +88,20 @@ struct PRRow: View {
                         .truncationMode(.tail)
                         .foregroundStyle(isHovered ? .white : .primary)
 
-                    Text("\(pr.repository) #\(String(pr.number))")
-                        .font(.caption)
-                        .foregroundStyle(isHovered ? .white.opacity(0.8) : .secondary)
+                    HStack(spacing: 6) {
+                        Text("\(pr.repository) #\(String(pr.number))")
+                        Text("+\(pr.additions)")
+                            .foregroundStyle(isHovered ? .white.opacity(0.8) : .green)
+                        Text("-\(pr.deletions)")
+                            .foregroundStyle(isHovered ? .white.opacity(0.8) : .red)
+                        Text("@\(pr.changedFiles)")
+                        HStack(spacing: 1) {
+                            Image(systemName: "bubble.right")
+                            Text("\(pr.totalComments)")
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(isHovered ? .white.opacity(0.8) : .secondary)
                 }
 
                 Spacer()
@@ -129,7 +140,11 @@ struct PRRow: View {
                     authorAvatarURL: URL(string: "https://avatars.githubusercontent.com/u/1?v=4"),
                     createdAt: Date(),
                     isDraft: false,
-                    reviewDecision: nil
+                    reviewDecision: nil,
+                    additions: 1404,
+                    deletions: 99,
+                    changedFiles: 17,
+                    totalComments: 3
                 )
             ],
             isExpanded: .constant(true)

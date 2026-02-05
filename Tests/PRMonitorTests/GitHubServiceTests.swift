@@ -73,7 +73,11 @@ private func prNode(
     reviewDecision: String? = nil,
     author: String = "alice",
     repo: String = "owner/repo",
-    createdAt: String = "2025-01-15T10:00:00Z"
+    createdAt: String = "2025-01-15T10:00:00Z",
+    additions: Int = 0,
+    deletions: Int = 0,
+    changedFiles: Int = 0,
+    comments: Int = 0
 ) -> [String: Any] {
     var node: [String: Any] = [
         "id": id,
@@ -84,6 +88,10 @@ private func prNode(
         "createdAt": createdAt,
         "author": ["login": author, "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4"],
         "repository": ["nameWithOwner": repo],
+        "additions": additions,
+        "deletions": deletions,
+        "changedFiles": changedFiles,
+        "comments": ["totalCount": comments],
     ]
     if let decision = reviewDecision {
         node["reviewDecision"] = decision
@@ -159,7 +167,10 @@ final class GitHubServiceTests: XCTestCase {
 
     func testValidResponseCategorizesCorrectly() async throws {
         // review-requested:@me → one PR with no decision (needs review)
-        let reviewRequested = prNode(id: "pr-1", number: 1, title: "Review me", reviewDecision: nil)
+        let reviewRequested = prNode(
+            id: "pr-1", number: 1, title: "Review me", reviewDecision: nil,
+            additions: 150, deletions: 30, changedFiles: 5, comments: 3
+        )
 
         // author:@me → one approved, one changes_requested, one waiting
         let authorApproved = prNode(id: "pr-2", number: 2, title: "Approved PR", reviewDecision: "APPROVED")
@@ -180,6 +191,13 @@ final class GitHubServiceTests: XCTestCase {
 
         XCTAssertEqual(results.needsReview.count, 1)
         XCTAssertEqual(results.needsReview.first?.id, "pr-1")
+
+        // Verify stats are parsed correctly
+        let pr1 = try XCTUnwrap(results.needsReview.first)
+        XCTAssertEqual(pr1.additions, 150)
+        XCTAssertEqual(pr1.deletions, 30)
+        XCTAssertEqual(pr1.changedFiles, 5)
+        XCTAssertEqual(pr1.totalComments, 3)
 
         XCTAssertEqual(results.approved.count, 1)
         XCTAssertEqual(results.approved.first?.id, "pr-2")

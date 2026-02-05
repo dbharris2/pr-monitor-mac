@@ -104,6 +104,12 @@ actor GitHubService: GitHubServiceProtocol {
                   nameWithOwner
                 }
                 reviewDecision
+                additions
+                deletions
+                changedFiles
+                comments {
+                  totalCount
+                }
               }
             }
           }
@@ -172,7 +178,11 @@ actor GitHubService: GitHubServiceProtocol {
                 authorAvatarURL: authorAvatarURL,
                 createdAt: createdAt,
                 isDraft: node.isDraft ?? false,
-                reviewDecision: reviewDecision
+                reviewDecision: reviewDecision,
+                additions: node.additions ?? 0,
+                deletions: node.deletions ?? 0,
+                changedFiles: node.changedFiles ?? 0,
+                totalComments: node.comments?.totalCount ?? 0
             )
         } ?? []
     }
@@ -203,6 +213,14 @@ private struct PRNode: Codable {
     let author: Author?
     let repository: Repository?
     let reviewDecision: String?
+    let additions: Int?
+    let deletions: Int?
+    let changedFiles: Int?
+    let comments: CommentsNode?
+}
+
+private struct CommentsNode: Codable {
+    let totalCount: Int
 }
 
 private struct Author: Codable {
