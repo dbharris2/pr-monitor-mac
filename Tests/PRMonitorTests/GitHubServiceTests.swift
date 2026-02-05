@@ -77,7 +77,7 @@ private func prNode(
     additions: Int = 0,
     deletions: Int = 0,
     changedFiles: Int = 0,
-    comments: Int = 0
+    totalCommentsCount: Int = 0
 ) -> [String: Any] {
     var node: [String: Any] = [
         "id": id,
@@ -91,7 +91,7 @@ private func prNode(
         "additions": additions,
         "deletions": deletions,
         "changedFiles": changedFiles,
-        "comments": ["totalCount": comments],
+        "totalCommentsCount": totalCommentsCount,
     ]
     if let decision = reviewDecision {
         node["reviewDecision"] = decision
@@ -169,7 +169,7 @@ final class GitHubServiceTests: XCTestCase {
         // review-requested:@me → one PR with no decision (needs review)
         let reviewRequested = prNode(
             id: "pr-1", number: 1, title: "Review me", reviewDecision: nil,
-            additions: 150, deletions: 30, changedFiles: 5, comments: 3
+            additions: 150, deletions: 30, changedFiles: 5, totalCommentsCount: 3
         )
 
         // author:@me → one approved, one changes_requested, one waiting

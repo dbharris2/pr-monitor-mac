@@ -107,9 +107,7 @@ actor GitHubService: GitHubServiceProtocol {
                 additions
                 deletions
                 changedFiles
-                comments {
-                  totalCount
-                }
+                totalCommentsCount
               }
             }
           }
@@ -182,7 +180,7 @@ actor GitHubService: GitHubServiceProtocol {
                 additions: node.additions ?? 0,
                 deletions: node.deletions ?? 0,
                 changedFiles: node.changedFiles ?? 0,
-                totalComments: node.comments?.totalCount ?? 0
+                totalComments: node.totalCommentsCount ?? 0
             )
         } ?? []
     }
@@ -216,11 +214,7 @@ private struct PRNode: Codable {
     let additions: Int?
     let deletions: Int?
     let changedFiles: Int?
-    let comments: CommentsNode?
-}
-
-private struct CommentsNode: Codable {
-    let totalCount: Int
+    let totalCommentsCount: Int?
 }
 
 private struct Author: Codable {
