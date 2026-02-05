@@ -32,7 +32,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 @main
 struct PRMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var appState = AppState()
+    @StateObject private var appState = AppState(
+        startAutomatically: NSClassFromString("XCTestCase") == nil
+    )
 
     var body: some Scene {
         MenuBarExtra {
