@@ -5,20 +5,30 @@ on:
   push:
     branches: [main]
 
+env:
+  SWIFTLINT_VERSION: 0.57.0
+  SWIFTFORMAT_VERSION: 0.54.6
+
 jobs:
   lint:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Mint
-        run: brew install mint
+      - name: Install SwiftLint
+        run: |
+          curl -sL "https://github.com/realm/SwiftLint/releases/download/$SWIFTLINT_VERSION/portable_swiftlint.zip" -o swiftlint.zip
+          unzip -q swiftlint.zip -d swiftlint
+          sudo mv swiftlint/swiftlint /usr/local/bin/
 
-      - name: Install tools from Mintfile
-        run: mint bootstrap
+      - name: Install SwiftFormat
+        run: |
+          curl -sL "https://github.com/nicklockwood/SwiftFormat/releases/download/$SWIFTFORMAT_VERSION/swiftformat.zip" -o swiftformat.zip
+          unzip -q swiftformat.zip
+          sudo mv swiftformat /usr/local/bin/
 
       - name: Run SwiftLint
-        run: mint run swiftlint --strict
+        run: swiftlint --strict
 
       - name: Run SwiftFormat
-        run: mint run swiftformat . --lint
+        run: swiftformat . --lint
