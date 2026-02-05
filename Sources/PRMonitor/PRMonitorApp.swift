@@ -4,6 +4,7 @@ import UserNotifications
 
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Keychain.migrateFromUserDefaultsIfNeeded()
         UNUserNotificationCenter.current().delegate = self
     }
 

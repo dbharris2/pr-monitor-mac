@@ -35,6 +35,8 @@ targets:
       CODE_SIGN_IDENTITY: "-"
     entitlements:
       path: Resources/PRMonitor.entitlements
+      properties:
+        com.apple.security.network.client: true
     dependencies:
       - package: KeyboardShortcuts
       - package: MenuBarExtraAccess

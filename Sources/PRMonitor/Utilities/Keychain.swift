@@ -1,18 +1,64 @@
 import Foundation
+import Security
 
-/// Using UserDefaults for development. Switch to Keychain for production release.
 enum Keychain {
-    private static let tokenKey = "github-token"
+    private static let service = "com.prmonitor.app"
+    private static let account = "github-token"
 
     static func setToken(_ token: String) {
-        UserDefaults.standard.set(token, forKey: tokenKey)
+        // Delete any existing token first to avoid errSecDuplicateItem
+        deleteToken()
+
+        guard let data = token.data(using: .utf8) else { return }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+        ]
+
+        SecItemAdd(query as CFDictionary, nil)
     }
 
     static func getToken() -> String? {
-        UserDefaults.standard.string(forKey: tokenKey)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess, let data = result as? Data else {
+            return nil
+        }
+
+        return String(data: data, encoding: .utf8)
     }
 
     static func deleteToken() {
-        UserDefaults.standard.removeObject(forKey: tokenKey)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+
+        SecItemDelete(query as CFDictionary)
+    }
+
+    /// Migrates a token from UserDefaults to Keychain, then removes the UserDefaults entry.
+    /// Safe to call multiple times — no-ops if there's nothing to migrate.
+    static func migrateFromUserDefaultsIfNeeded() {
+        let legacyKey = "github-token"
+        guard let token = UserDefaults.standard.string(forKey: legacyKey) else { return }
+        if getToken() == nil {
+            setToken(token)
+        }
+        UserDefaults.standard.removeObject(forKey: legacyKey)
     }
 }
