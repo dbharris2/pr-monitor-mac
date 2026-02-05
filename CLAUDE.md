@@ -12,9 +12,8 @@ A macOS menu bar app for monitoring GitHub pull requests.
 ## Setup
 
 ```bash
-brew install xcodegen   # If not already installed
-xcodegen generate       # Creates PRMonitor.xcodeproj
-open PRMonitor.xcodeproj
+brew install xcodegen just   # If not already installed
+just xcode                   # Generates project + opens in Xcode
 ```
 
 ## Project Structure
@@ -36,10 +35,16 @@ open PRMonitor.xcodeproj
 - Polling interval configurable in Settings
 - `MenuBarExtra` with `.window` style for richer UI
 
-## Building
+## Common Commands
+
+Use `just` for all build/dev tasks:
 
 ```bash
-xcodegen generate && xcodebuild -scheme PRMonitor -configuration Debug build
+just build    # Generate project + build
+just run      # Build + launch app
+just lint     # Check formatting + linting
+just format   # Auto-fix formatting
+just clean    # Remove build artifacts
 ```
 
-Or just open in Xcode and press ⌘R.
+Or open in Xcode with `just xcode` and press ⌘R.

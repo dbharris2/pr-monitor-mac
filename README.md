@@ -11,22 +11,17 @@ A macOS menu bar app for monitoring GitHub pull requests.
 ## Build & Run
 
 ```bash
-# Install XcodeGen (if not already installed)
-brew install xcodegen
+# Install dependencies
+brew install xcodegen just
 
-# Generate Xcode project and build
-xcodegen generate
-xcodebuild -scheme PRMonitor -configuration Debug build
-
-# Run the app
-open ~/Library/Developer/Xcode/DerivedData/PRMonitor-*/Build/Products/Debug/PRMonitor.app
+# Build and run
+just run
 ```
 
 Or open in Xcode and press ⌘R:
 
 ```bash
-xcodegen generate
-open PRMonitor.xcodeproj
+just xcode
 ```
 
 ## Setup
@@ -66,20 +61,29 @@ Choose between compact dots or colored numbers in Settings.
 
 ## Development
 
-### Linting & Formatting
+### Common Commands
+
+All common tasks are available via [`just`](https://github.com/casey/just):
 
 ```bash
-# Install tools (version-locked via Mintfile)
+just          # List all available commands
+just build    # Generate project + build
+just run      # Build + launch app
+just open     # Relaunch without rebuilding
+just lint     # Check formatting + linting
+just format   # Auto-fix formatting
+just lint-fix # Auto-fix lint issues
+just clean    # Remove build artifacts
+just xcode    # Open project in Xcode
+```
+
+### Linting & Formatting
+
+Lint tools are version-locked via Mintfile:
+
+```bash
 brew install mint
 mint bootstrap
-
-# Run checks
-mint run swiftlint              # Check for lint issues
-mint run swiftformat . --lint   # Check formatting
-
-# Auto-fix
-mint run swiftlint --fix        # Fix lint issues
-mint run swiftformat .          # Format code
 ```
 
 Alternatively, install directly via Homebrew (versions may vary):
