@@ -40,6 +40,9 @@ targets:
     dependencies:
       - package: KeyboardShortcuts
       - package: MenuBarExtraAccess
+    scheme:
+      testTargets:
+        - PRMonitorTests
     preBuildScripts:
       - name: SwiftLint
         basedOnDependencyAnalysis: false
@@ -57,3 +60,12 @@ targets:
           else
             echo "warning: SwiftFormat not installed, install via 'brew install swiftformat'"
           fi
+  PRMonitorTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/PRMonitorTests
+    settings:
+      GENERATE_INFOPLIST_FILE: true
+    dependencies:
+      - target: PRMonitor

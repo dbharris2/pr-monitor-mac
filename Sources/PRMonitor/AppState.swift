@@ -35,7 +35,7 @@ class AppState: ObservableObject {
     @AppStorage("notificationsEnabled") var notificationsEnabled: Bool = false
     @AppStorage("menuBarStyle") var menuBarStyle: String = "dots" // "dots" or "numbers"
 
-    private let gitHubService = GitHubService()
+    private let gitHubService: GitHubServiceProtocol
     private var pollTimer: Timer?
     private var notifiedPRIds: Set<String> = []
     private var previousApprovedIds: Set<String> = []
@@ -46,7 +46,9 @@ class AppState: ObservableObject {
         needsReview.count
     }
 
-    init() {
+    init(service: GitHubServiceProtocol = GitHubService(), startAutomatically: Bool = true) {
+        self.gitHubService = service
+        guard startAutomatically else { return }
         startPolling()
         observeWake()
         setupKeyboardShortcut()

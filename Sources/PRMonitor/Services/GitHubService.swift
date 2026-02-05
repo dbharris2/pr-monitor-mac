@@ -1,7 +1,16 @@
 import Foundation
 
-actor GitHubService {
+protocol GitHubServiceProtocol: Sendable {
+    func fetchAllPRs() async throws -> PRFetchResults
+}
+
+actor GitHubService: GitHubServiceProtocol {
     private let baseURL = URL(string: "https://api.github.com/graphql")!
+    private let session: URLSession
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
 
     enum GitHubError: LocalizedError {
         case noToken
@@ -27,7 +36,10 @@ actor GitHubService {
         guard let token = Keychain.getToken() else {
             throw GitHubError.noToken
         }
+        return try await fetchAllPRs(token: token)
+    }
 
+    func fetchAllPRs(token: String) async throws -> PRFetchResults {
         async let needsReview = fetchPRs(query: "is:pr is:open review-requested:@me", token: token)
         async let authored = fetchPRs(query: "is:pr is:open author:@me", token: token)
         // PRs I've reviewed that aren't approved (includes changes_requested and pending)
@@ -106,7 +118,7 @@ actor GitHubService {
         let body = ["query": graphQLQuery]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw GitHubError.invalidResponse(0)
