@@ -6,8 +6,8 @@ on:
     branches: [main]
 
 env:
-  SWIFTLINT_VERSION: 0.57.0
-  SWIFTFORMAT_VERSION: 0.54.6
+  SWIFTLINT_VERSION: 0.63.2
+  SWIFTFORMAT_VERSION: 0.59.1
 
 jobs:
   lint:
