@@ -1,5 +1,5 @@
 @testable import PRMonitor
-import XCTest
+@preconcurrency import XCTest
 
 // MARK: - Mock Service
 
@@ -63,16 +63,16 @@ final class AppStateTests: XCTestCase {
     private var mockService: MockGitHubService!
     private var appState: AppState!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         mockService = MockGitHubService()
         appState = AppState(service: mockService, startAutomatically: false)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         appState = nil
         mockService = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: refresh() populates properties
