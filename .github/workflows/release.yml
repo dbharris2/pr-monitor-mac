@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,5 +49,36 @@ jobs:
           gh release create "v${{ steps.version.outputs.new_version }}" \
             --title "v${{ steps.version.outputs.new_version }}" \
             --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    needs: release
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build Release
+        run: |
+          xcodebuild -scheme PRMonitor \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="-" \
+            build \
+            SYMROOT=build
+
+      - name: Zip app bundle
+        run: ditto -c -k --keepParent build/Release/PRMonitor.app PRMonitor.zip
+
+      - name: Upload to release
+        run: gh release upload "v${{ needs.release.outputs.new_version }}" PRMonitor.zip
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
