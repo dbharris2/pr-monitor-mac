@@ -66,17 +66,20 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Resolve dependencies
+        run: xcodebuild -resolvePackageDependencies -scheme PRMonitor
+
       - name: Build Release
         run: |
           xcodebuild -scheme PRMonitor \
             -configuration Release \
             -destination 'platform=macOS' \
             CODE_SIGN_IDENTITY="-" \
-            build \
-            SYMROOT=build
+            -derivedDataPath build \
+            build
 
       - name: Zip app bundle
-        run: ditto -c -k --keepParent build/Release/PRMonitor.app PRMonitor.zip
+        run: ditto -c -k --keepParent build/Build/Products/Release/PRMonitor.app PRMonitor.zip
 
       - name: Upload to release
         run: gh release upload "v${{ needs.release.outputs.new_version }}" PRMonitor.zip
