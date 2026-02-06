@@ -5,6 +5,7 @@ excluded:
   - .build
   - .sl
   - DerivedData
+  - build
 
 # Rules to disable (too pedantic for this project)
 disabled_rules:
