@@ -418,12 +418,17 @@ class AppState: ObservableObject {
                 author: "alice",
                 authorAvatarURL: URL(string: "https://avatars.githubusercontent.com/u/1?v=4"),
                 createdAt: Date().addingTimeInterval(-86400),
+                updatedAt: Date().addingTimeInterval(-3600),
                 isDraft: false,
                 reviewDecision: nil,
                 additions: 250,
                 deletions: 40,
                 changedFiles: 8,
-                totalComments: 5
+                totalComments: 5,
+                reviewers: [
+                    Reviewer(login: "bob", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/2?v=4")),
+                    Reviewer(login: "carol", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/3?v=4")),
+                ]
             ),
             PullRequest(
                 id: "2",
@@ -434,12 +439,14 @@ class AppState: ObservableObject {
                 author: "bob",
                 authorAvatarURL: URL(string: "https://avatars.githubusercontent.com/u/2?v=4"),
                 createdAt: Date().addingTimeInterval(-3600),
+                updatedAt: Date().addingTimeInterval(-1800),
                 isDraft: false,
                 reviewDecision: nil,
                 additions: 12,
                 deletions: 3,
                 changedFiles: 2,
-                totalComments: 0
+                totalComments: 0,
+                reviewers: []
             )
         ]
         state.waitingForReviewers = [
@@ -452,12 +459,19 @@ class AppState: ObservableObject {
                 author: "me",
                 authorAvatarURL: URL(string: "https://avatars.githubusercontent.com/u/3?v=4"),
                 createdAt: Date().addingTimeInterval(-7200),
+                updatedAt: Date().addingTimeInterval(-600),
                 isDraft: false,
                 reviewDecision: nil,
                 additions: 88,
                 deletions: 15,
                 changedFiles: 4,
-                totalComments: 2
+                totalComments: 2,
+                reviewers: [
+                    Reviewer(login: "alice", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/1?v=4")),
+                    Reviewer(login: "dave", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/4?v=4")),
+                    Reviewer(login: "eve", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/5?v=4")),
+                    Reviewer(login: "frank", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/6?v=4")),
+                ]
             )
         ]
         state.lastUpdated = Date()

@@ -72,49 +72,74 @@ struct PRRow: View {
             onOpen?()
             NSWorkspace.shared.open(pr.url)
         } label: {
-            HStack(spacing: 8) {
-                AsyncImage(url: pr.authorAvatarURL) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Image(systemName: "person.circle.fill")
-                        .resizable()
-                        .foregroundStyle(.secondary)
-                }
-                .frame(width: 24, height: 24)
-                .clipShape(Circle())
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(pr.title)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .foregroundStyle(isHovered ? .white : .primary)
-
-                    HStack(spacing: 6) {
-                        Text("\(pr.repository) #\(String(pr.number))")
-                        Text("+\(pr.additions)")
-                            .foregroundStyle(isHovered ? .white.opacity(0.8) : .green)
-                        Text("-\(pr.deletions)")
-                            .foregroundStyle(isHovered ? .white.opacity(0.8) : .red)
-                        Text("@\(pr.changedFiles)")
-                        HStack(spacing: 1) {
-                            Image(systemName: "bubble.right")
-                            Text("\(pr.totalComments)")
-                        }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(isHovered ? .white.opacity(0.8) : .secondary)
-                }
-
-                Spacer()
-
-                Circle()
+            HStack(spacing: 0) {
+                RoundedRectangle(cornerRadius: 1.5)
                     .fill(statusColor)
-                    .frame(width: 8, height: 8)
+                    .frame(width: 3)
+                    .padding(.vertical, 3)
+
+                HStack(spacing: 8) {
+                    AsyncImage(url: pr.authorAvatarURL) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Image(systemName: "person.circle.fill")
+                            .resizable()
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: 24, height: 24)
+                    .clipShape(Circle())
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 4) {
+                            Text(pr.title)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .foregroundStyle(isHovered ? .white : .primary)
+
+                            Spacer()
+
+                            Text(relativeTime(from: pr.updatedAt))
+                                .font(.caption)
+                                .foregroundStyle(isHovered ? .white.opacity(0.7) : .secondary)
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
+
+                        HStack(spacing: 6) {
+                            Text("\(pr.repository) #\(String(pr.number))")
+                                .lineLimit(1)
+                                .truncationMode(.head)
+                            Text("+\(pr.additions)")
+                                .fixedSize()
+                                .foregroundStyle(isHovered ? .white.opacity(0.8) : .green)
+                            Text("-\(pr.deletions)")
+                                .fixedSize()
+                                .foregroundStyle(isHovered ? .white.opacity(0.8) : .red)
+                            Text("@\(pr.changedFiles)")
+                                .fixedSize()
+                            HStack(spacing: 1) {
+                                Image(systemName: "bubble.right")
+                                Text("\(pr.totalComments)")
+                            }
+                            .fixedSize()
+
+                            Spacer()
+
+                            ReviewerAvatars(reviewers: pr.reviewers, isHovered: isHovered)
+                                .fixedSize()
+                        }
+                        .font(.caption)
+                        .foregroundStyle(isHovered ? .white.opacity(0.8) : .secondary)
+                    }
+                }
+                .padding(.leading, 8)
+                .padding(.trailing, 12)
+                .padding(.vertical, 6)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .frame(minHeight: 50)
+            .padding(.leading, 12)
             .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: 4)
@@ -125,6 +150,79 @@ struct PRRow: View {
         .onHover { hovering in
             isHovered = hovering
         }
+    }
+}
+
+// MARK: - Reviewer Avatars
+
+private struct ReviewerAvatars: View {
+    let reviewers: [Reviewer]
+    let isHovered: Bool
+
+    private let avatarSize: CGFloat = 18
+    private let overlap: CGFloat = 6
+    private let maxVisible = 3
+
+    var body: some View {
+        if reviewers.isEmpty {
+            EmptyView()
+        } else {
+            HStack(spacing: 0) {
+                let visible = Array(reviewers.prefix(maxVisible))
+                ZStack(alignment: .leading) {
+                    ForEach(Array(visible.enumerated()), id: \.element.login) { index, reviewer in
+                        AsyncImage(url: reviewer.avatarURL) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Image(systemName: "person.circle.fill")
+                                .resizable()
+                                .foregroundStyle(isHovered ? .white.opacity(0.6) : .secondary)
+                        }
+                        .frame(width: avatarSize, height: avatarSize)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(
+                            isHovered ? Color(nsColor: .selectedContentBackgroundColor) : Color(nsColor: .windowBackgroundColor),
+                            lineWidth: 1.5
+                        ))
+                        .offset(x: CGFloat(index) * (avatarSize - overlap))
+                    }
+                }
+                .frame(width: avatarSize + CGFloat(max(visible.count - 1, 0)) * (avatarSize - overlap), alignment: .leading)
+
+                if reviewers.count > maxVisible {
+                    Text("+\(reviewers.count - maxVisible)")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(isHovered ? .white.opacity(0.7) : .secondary)
+                        .padding(.leading, 2)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Relative Time
+
+func relativeTime(from date: Date) -> String {
+    let now = Date()
+    let seconds = now.timeIntervalSince(date)
+
+    if seconds < 60 {
+        return "now"
+    } else if seconds < 3600 {
+        let minutes = Int(seconds / 60)
+        return "\(minutes)m ago"
+    } else if seconds < 86400 {
+        let hours = Int(seconds / 3600)
+        return "\(hours)h ago"
+    } else if seconds < 604_800 {
+        let days = Int(seconds / 86400)
+        return "\(days)d ago"
+    } else {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date)
     }
 }
 
@@ -142,12 +240,18 @@ struct PRRow: View {
                     author: "alice",
                     authorAvatarURL: URL(string: "https://avatars.githubusercontent.com/u/1?v=4"),
                     createdAt: Date(),
+                    updatedAt: Date().addingTimeInterval(-7200),
                     isDraft: false,
                     reviewDecision: nil,
                     additions: 1404,
                     deletions: 99,
                     changedFiles: 17,
-                    totalComments: 3
+                    totalComments: 3,
+                    reviewers: [
+                        Reviewer(login: "bob", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/2?v=4")),
+                        Reviewer(login: "carol", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/3?v=4")),
+                        Reviewer(login: "dave", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/4?v=4")),
+                    ]
                 )
             ],
             isExpanded: .constant(true)

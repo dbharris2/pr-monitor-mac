@@ -1,5 +1,10 @@
 import Foundation
 
+struct Reviewer: Codable, Hashable {
+    let login: String
+    let avatarURL: URL?
+}
+
 struct PullRequest: Identifiable, Codable, Hashable {
     let id: String
     let number: Int
@@ -9,12 +14,14 @@ struct PullRequest: Identifiable, Codable, Hashable {
     let author: String
     let authorAvatarURL: URL?
     let createdAt: Date
+    let updatedAt: Date
     let isDraft: Bool
     let reviewDecision: ReviewDecision?
     let additions: Int
     let deletions: Int
     let changedFiles: Int
     let totalComments: Int
+    let reviewers: [Reviewer]
 
     enum ReviewDecision: String, Codable {
         case approved = "APPROVED"

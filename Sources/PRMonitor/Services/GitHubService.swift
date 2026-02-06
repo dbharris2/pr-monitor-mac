@@ -73,11 +73,8 @@ actor GitHubService: GitHubServiceProtocol {
         // Combine and dedupe by ID
         var seen = Set<String>()
         var combined: [PullRequest] = []
-        for pr in reviewedPRs + requestedWithChanges {
-            if !seen.contains(pr.id) {
-                seen.insert(pr.id)
-                combined.append(pr)
-            }
+        for pr in reviewedPRs + requestedWithChanges where seen.insert(pr.id).inserted {
+            combined.append(pr)
         }
         results.myChangesRequested = combined
 
@@ -96,6 +93,7 @@ actor GitHubService: GitHubServiceProtocol {
                 url
                 isDraft
                 createdAt
+                updatedAt
                 author {
                   login
                   avatarUrl(size: 64)
@@ -108,6 +106,24 @@ actor GitHubService: GitHubServiceProtocol {
                 deletions
                 changedFiles
                 totalCommentsCount
+                reviewRequests(first: 5) {
+                  nodes {
+                    requestedReviewer {
+                      ... on User {
+                        login
+                        avatarUrl(size: 64)
+                      }
+                    }
+                  }
+                }
+                latestReviews(first: 5) {
+                  nodes {
+                    author {
+                      login
+                      avatarUrl(size: 64)
+                    }
+                  }
+                }
               }
             }
           }
@@ -141,48 +157,77 @@ actor GitHubService: GitHubServiceProtocol {
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withInternetDateTime]
 
-        return result.data?.search.nodes.compactMap { node -> PullRequest? in
-            guard let id = node.id,
-                  let number = node.number,
-                  let title = node.title,
-                  let urlString = node.url,
-                  let url = URL(string: urlString),
-                  let repository = node.repository?.nameWithOwner,
-                  let author = node.author?.login,
-                  let createdAtString = node.createdAt,
-                  let createdAt = dateFormatter.date(from: createdAtString) else {
-                return nil
-            }
-
-            let reviewDecision: PullRequest.ReviewDecision? = if let decision = node.reviewDecision {
-                PullRequest.ReviewDecision(rawValue: decision)
-            } else {
-                nil
-            }
-
-            let authorAvatarURL: URL? = if let avatarUrlString = node.author?.avatarUrl {
-                URL(string: avatarUrlString)
-            } else {
-                nil
-            }
-
-            return PullRequest(
-                id: id,
-                number: number,
-                title: title,
-                url: url,
-                repository: repository,
-                author: author,
-                authorAvatarURL: authorAvatarURL,
-                createdAt: createdAt,
-                isDraft: node.isDraft ?? false,
-                reviewDecision: reviewDecision,
-                additions: node.additions ?? 0,
-                deletions: node.deletions ?? 0,
-                changedFiles: node.changedFiles ?? 0,
-                totalComments: node.totalCommentsCount ?? 0
-            )
+        return result.data?.search.nodes.compactMap { node in
+            Self.makePullRequest(from: node, dateFormatter: dateFormatter)
         } ?? []
+    }
+
+    private static func makePullRequest(from node: PRNode, dateFormatter: ISO8601DateFormatter) -> PullRequest? {
+        guard let id = node.id,
+              let number = node.number,
+              let title = node.title,
+              let urlString = node.url,
+              let url = URL(string: urlString),
+              let repository = node.repository?.nameWithOwner,
+              let author = node.author?.login,
+              let createdAtString = node.createdAt,
+              let createdAt = dateFormatter.date(from: createdAtString) else {
+            return nil
+        }
+
+        let updatedAt: Date = if let updatedAtString = node.updatedAt,
+                                 let parsed = dateFormatter.date(from: updatedAtString) {
+            parsed
+        } else {
+            createdAt
+        }
+
+        let reviewDecision: PullRequest.ReviewDecision? = if let decision = node.reviewDecision {
+            PullRequest.ReviewDecision(rawValue: decision)
+        } else {
+            nil
+        }
+
+        let authorAvatarURL: URL? = if let avatarUrlString = node.author?.avatarUrl {
+            URL(string: avatarUrlString)
+        } else {
+            nil
+        }
+
+        let reviewers = Self.mergeReviewers(from: node)
+
+        return PullRequest(
+            id: id,
+            number: number,
+            title: title,
+            url: url,
+            repository: repository,
+            author: author,
+            authorAvatarURL: authorAvatarURL,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            isDraft: node.isDraft ?? false,
+            reviewDecision: reviewDecision,
+            additions: node.additions ?? 0,
+            deletions: node.deletions ?? 0,
+            changedFiles: node.changedFiles ?? 0,
+            totalComments: node.totalCommentsCount ?? 0,
+            reviewers: reviewers
+        )
+    }
+
+    private static func mergeReviewers(from node: PRNode) -> [Reviewer] {
+        var seenLogins = Set<String>()
+        var reviewers: [Reviewer] = []
+        for reqNode in node.reviewRequests?.nodes ?? [] {
+            guard let login = reqNode.requestedReviewer?.login, seenLogins.insert(login).inserted else { continue }
+            reviewers.append(Reviewer(login: login, avatarURL: reqNode.requestedReviewer?.avatarUrl.flatMap(URL.init(string:))))
+        }
+        for revNode in node.latestReviews?.nodes ?? [] {
+            guard let login = revNode.author?.login, seenLogins.insert(login).inserted else { continue }
+            reviewers.append(Reviewer(login: login, avatarURL: revNode.author?.avatarUrl.flatMap(URL.init(string:))))
+        }
+        return reviewers
     }
 }
 
@@ -208,6 +253,7 @@ private struct PRNode: Codable {
     let url: String?
     let isDraft: Bool?
     let createdAt: String?
+    let updatedAt: String?
     let author: Author?
     let repository: Repository?
     let reviewDecision: String?
@@ -215,6 +261,29 @@ private struct PRNode: Codable {
     let deletions: Int?
     let changedFiles: Int?
     let totalCommentsCount: Int?
+    let reviewRequests: ReviewRequestConnection?
+    let latestReviews: LatestReviewConnection?
+}
+
+private struct ReviewRequestConnection: Codable {
+    let nodes: [ReviewRequestNode]
+}
+
+private struct ReviewRequestNode: Codable {
+    let requestedReviewer: RequestedReviewer?
+}
+
+private struct RequestedReviewer: Codable {
+    let login: String?
+    let avatarUrl: String?
+}
+
+private struct LatestReviewConnection: Codable {
+    let nodes: [LatestReviewNode]
+}
+
+private struct LatestReviewNode: Codable {
+    let author: Author?
 }
 
 private struct Author: Codable {

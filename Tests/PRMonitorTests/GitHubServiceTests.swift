@@ -3,7 +3,6 @@ import XCTest
 
 // MARK: - URLProtocol Mock
 
-// swiftlint:disable:next static_over_final_class
 private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var handlers: [(URLRequest) -> (Data, HTTPURLResponse)?] = []
 
@@ -74,10 +73,13 @@ private func prNode(
     author: String = "alice",
     repo: String = "owner/repo",
     createdAt: String = "2025-01-15T10:00:00Z",
+    updatedAt: String = "2025-01-15T12:00:00Z",
     additions: Int = 0,
     deletions: Int = 0,
     changedFiles: Int = 0,
-    totalCommentsCount: Int = 0
+    totalCommentsCount: Int = 0,
+    reviewRequests: [[String: Any]] = [],
+    latestReviews: [[String: Any]] = []
 ) -> [String: Any] {
     var node: [String: Any] = [
         "id": id,
@@ -86,12 +88,15 @@ private func prNode(
         "url": url,
         "isDraft": isDraft,
         "createdAt": createdAt,
+        "updatedAt": updatedAt,
         "author": ["login": author, "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4"],
         "repository": ["nameWithOwner": repo],
         "additions": additions,
         "deletions": deletions,
         "changedFiles": changedFiles,
         "totalCommentsCount": totalCommentsCount,
+        "reviewRequests": ["nodes": reviewRequests],
+        "latestReviews": ["nodes": latestReviews],
     ]
     if let decision = reviewDecision {
         node["reviewDecision"] = decision
