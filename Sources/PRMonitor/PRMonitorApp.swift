@@ -189,43 +189,53 @@ struct MenuContent: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.openSettings) private var openSettings
 
+    private func dismissMenu() {
+        appState.isMenuPresented = false
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             PRSection(
                 title: "Needs my review",
                 prs: appState.needsReview,
                 isExpanded: appState.bindingForSection("needsReview"),
-                statusColorOverride: .gitHubOrange
+                statusColorOverride: .gitHubOrange,
+                onOpenPR: dismissMenu
             )
 
             PRSection(
                 title: "Waiting for review",
                 prs: appState.waitingForReviewers,
-                isExpanded: appState.bindingForSection("waitingForReviewers")
+                isExpanded: appState.bindingForSection("waitingForReviewers"),
+                onOpenPR: dismissMenu
             )
 
             PRSection(
                 title: "Approved",
                 prs: appState.approved,
-                isExpanded: appState.bindingForSection("approved")
+                isExpanded: appState.bindingForSection("approved"),
+                onOpenPR: dismissMenu
             )
 
             PRSection(
                 title: "Returned to me",
                 prs: appState.changesRequested,
-                isExpanded: appState.bindingForSection("changesRequested")
+                isExpanded: appState.bindingForSection("changesRequested"),
+                onOpenPR: dismissMenu
             )
 
             PRSection(
                 title: "Reviewed",
                 prs: appState.myChangesRequested,
-                isExpanded: appState.bindingForSection("myChangesRequested")
+                isExpanded: appState.bindingForSection("myChangesRequested"),
+                onOpenPR: dismissMenu
             )
 
             PRSection(
                 title: "Drafts",
                 prs: appState.drafts,
-                isExpanded: appState.bindingForSection("drafts")
+                isExpanded: appState.bindingForSection("drafts"),
+                onOpenPR: dismissMenu
             )
 
             Divider()

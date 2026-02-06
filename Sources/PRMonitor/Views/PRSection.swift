@@ -9,6 +9,7 @@ struct PRSection: View {
     let prs: [PullRequest]
     @Binding var isExpanded: Bool
     var statusColorOverride: Color?
+    var onOpenPR: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -36,7 +37,7 @@ struct PRSection: View {
 
             if isExpanded, !prs.isEmpty {
                 ForEach(prs) { pr in
-                    PRRow(pr: pr, statusColorOverride: statusColorOverride)
+                    PRRow(pr: pr, statusColorOverride: statusColorOverride, onOpen: onOpenPR)
                 }
             }
         }
@@ -46,6 +47,7 @@ struct PRSection: View {
 struct PRRow: View {
     let pr: PullRequest
     var statusColorOverride: Color?
+    var onOpen: (() -> Void)?
     @State private var isHovered = false
 
     private var statusColor: Color {
@@ -67,6 +69,7 @@ struct PRRow: View {
 
     var body: some View {
         Button {
+            onOpen?()
             NSWorkspace.shared.open(pr.url)
         } label: {
             HStack(spacing: 8) {
