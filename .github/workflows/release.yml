@@ -48,7 +48,20 @@ jobs:
         run: |
           gh release create "v${{ steps.version.outputs.new_version }}" \
             --title "v${{ steps.version.outputs.new_version }}" \
-            --generate-notes
+            --generate-notes \
+            --notes-start-tag "$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")"
+
+          gh release edit "v${{ steps.version.outputs.new_version }}" \
+            --notes "$(gh release view "v${{ steps.version.outputs.new_version }}" --json body -q .body)
+
+          ## Installation
+          1. Download **PRMonitor.zip** from the assets below
+          2. Extract the zip and move **PRMonitor.app** to your Applications folder
+          3. Before opening, run this in Terminal to remove the quarantine flag:
+             \`\`\`
+             xattr -cr /Applications/PRMonitor.app
+             \`\`\`
+          4. Open PRMonitor from your Applications folder"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
