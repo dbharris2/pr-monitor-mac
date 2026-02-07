@@ -1,5 +1,5 @@
 @testable import PRMonitor
-import XCTest
+@preconcurrency import XCTest
 
 // MARK: - Mock Service
 
@@ -24,6 +24,10 @@ private actor MockGitHubService: GitHubServiceProtocol {
             throw error
         }
         return resultToReturn ?? PRFetchResults()
+    }
+
+    func fetchLatestRelease() async throws -> String? {
+        nil
     }
 }
 

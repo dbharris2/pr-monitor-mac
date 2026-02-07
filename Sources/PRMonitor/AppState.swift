@@ -16,6 +16,11 @@ class AppState: ObservableObject {
     @Published var lastUpdated: Date?
     @Published var error: String?
     @Published var isMenuPresented = false
+    @Published var updateAvailable: String?
+
+    var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+    }
 
     @Published var expandedSections: [String: Bool] = [
         "needsReview": true,
@@ -209,6 +214,11 @@ class AppState: ObservableObject {
             drafts = results.drafts
 
             lastUpdated = Date()
+
+            // Check for updates (don't let failures affect the main refresh)
+            if let latest = try? await gitHubService.fetchLatestRelease() {
+                updateAvailable = Self.isNewer(latest, than: appVersion) ? latest : nil
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -390,6 +400,22 @@ class AppState: ObservableObject {
 
             UNUserNotificationCenter.current().add(request)
         }
+    }
+
+    static func isNewer(_ candidate: String, than current: String) -> Bool {
+        let parse: (String) -> [Int] = { version in
+            version.split(separator: ".").compactMap { Int($0) }
+        }
+        let candidateParts = parse(candidate)
+        let currentParts = parse(current)
+        let count = max(candidateParts.count, currentParts.count)
+        for i in 0 ..< count {
+            let c = i < candidateParts.count ? candidateParts[i] : 0
+            let v = i < currentParts.count ? currentParts[i] : 0
+            if c > v { return true }
+            if c < v { return false }
+        }
+        return false
     }
 
     func startPolling() {

@@ -88,6 +88,7 @@ jobs:
             -configuration Release \
             -destination 'platform=macOS' \
             CODE_SIGN_IDENTITY="-" \
+            MARKETING_VERSION=${{ needs.release.outputs.new_version }} \
             -derivedDataPath build \
             build
 

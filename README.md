@@ -4,9 +4,11 @@ A macOS menu bar app for monitoring GitHub pull requests.
 
 ## Requirements
 
-- macOS 14+
-- Xcode 15+
+- macOS 26+ (to build)
+- Xcode 26+ (Swift 6.2)
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+
+The app runs on macOS 14+.
 
 ## Build & Run
 
