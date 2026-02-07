@@ -2,6 +2,7 @@ import Foundation
 
 protocol GitHubServiceProtocol: Sendable {
     func fetchAllPRs() async throws -> PRFetchResults
+    func fetchLatestRelease() async throws -> String?
 }
 
 actor GitHubService: GitHubServiceProtocol {
@@ -79,6 +80,35 @@ actor GitHubService: GitHubServiceProtocol {
         results.myChangesRequested = combined
 
         return results
+    }
+
+    func fetchLatestRelease() async throws -> String? {
+        let url = URL(string: "https://api.github.com/repos/dbharris2/pr-monitor-mac/releases/latest")!
+        var request = URLRequest(url: url)
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            return nil
+        }
+
+        // 404 means no releases exist
+        if httpResponse.statusCode == 404 {
+            return nil
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            return nil
+        }
+
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let tagName = json?["tag_name"] as? String else {
+            return nil
+        }
+
+        // Strip leading "v" if present
+        return tagName.hasPrefix("v") ? String(tagName.dropFirst()) : tagName
     }
 
     private func fetchPRs(query: String, token: String) async throws -> [PullRequest] {

@@ -25,6 +25,10 @@ private actor MockGitHubService: GitHubServiceProtocol {
         }
         return resultToReturn ?? PRFetchResults()
     }
+
+    func fetchLatestRelease() async throws -> String? {
+        nil
+    }
 }
 
 // MARK: - Helpers
