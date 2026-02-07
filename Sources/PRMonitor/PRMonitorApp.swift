@@ -71,7 +71,11 @@ struct MenuBarLabel: View {
     private func createMenuBarImage() -> NSImage {
         let iconSize: CGFloat = 18
         let gapAfterIcon: CGFloat = 3
-        let iconTint: NSColor = .white
+        #if DEBUG
+            let iconTint: NSColor = .systemOrange
+        #else
+            let iconTint: NSColor = .white
+        #endif
 
         // Colors for each category
         let greenColor = NSColor.systemGreen
