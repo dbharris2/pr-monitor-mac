@@ -284,14 +284,36 @@ struct MenuContent: View {
                 NSApplication.shared.terminate(nil)
             }
 
-            if let lastUpdated = appState.lastUpdated {
-                Text("Updated \(lastUpdated, style: .relative) ago")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
-                    .padding(.bottom, 6)
+            HStack {
+                if let lastUpdated = appState.lastUpdated {
+                    Text("Updated \(lastUpdated, style: .relative) ago")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                Spacer()
+                if let update = appState.updateAvailable {
+                    Button {
+                        NSWorkspace.shared.open(URL(string: "https://github.com/dbharris2/pr-monitor-mac/releases/latest")!)
+                    } label: {
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(Color.accentColor)
+                                .frame(width: 6, height: 6)
+                            Text("v\(appState.appVersion) → v\(update)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text("v\(appState.appVersion)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
             }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
         }
         .frame(width: 380)
     }
