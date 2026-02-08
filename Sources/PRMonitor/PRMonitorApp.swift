@@ -82,11 +82,11 @@ struct MenuBarLabel: View {
         let orangeColor = NSColor(red: 247 / 255, green: 129 / 255, blue: 102 / 255, alpha: 1)
         let redColor = NSColor.systemRed
 
-        // Build items to display (color, count)
+        // Build items to display (color, count) — matches menu section order
         var items: [(NSColor, Int)] = []
-        if approvedCount > 0 { items.append((greenColor, approvedCount)) }
         if needsReviewCount > 0 { items.append((orangeColor, needsReviewCount)) }
         if changesRequestedCount > 0 { items.append((redColor, changesRequestedCount)) }
+        if approvedCount > 0 { items.append((greenColor, approvedCount)) }
 
         if style == "numbers" {
             return createNumbersImage(iconSize: iconSize, gapAfterIcon: gapAfterIcon, iconTint: iconTint, items: items)
@@ -213,9 +213,9 @@ struct MenuContent: View {
             )
 
             PRSection(
-                title: "Waiting for review",
-                prs: appState.visibleWaitingForReviewers,
-                isExpanded: appState.bindingForSection("waitingForReviewers"),
+                title: "Returned to me",
+                prs: appState.visibleChangesRequested,
+                isExpanded: appState.bindingForSection("changesRequested"),
                 onOpenPR: dismissMenu
             )
 
@@ -227,9 +227,9 @@ struct MenuContent: View {
             )
 
             PRSection(
-                title: "Returned to me",
-                prs: appState.visibleChangesRequested,
-                isExpanded: appState.bindingForSection("changesRequested"),
+                title: "Waiting for review",
+                prs: appState.visibleWaitingForReviewers,
+                isExpanded: appState.bindingForSection("waitingForReviewers"),
                 onOpenPR: dismissMenu
             )
 
