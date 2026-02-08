@@ -42,9 +42,9 @@ struct PRMonitorApp: App {
                 .environmentObject(appState)
         } label: {
             MenuBarLabel(
-                approvedCount: appState.approved.count,
+                approvedCount: appState.visibleApproved.count,
                 needsReviewCount: appState.needsReviewCount,
-                changesRequestedCount: appState.changesRequested.count,
+                changesRequestedCount: appState.visibleChangesRequested.count,
                 style: appState.menuBarStyle
             )
         }
@@ -197,50 +197,66 @@ struct MenuContent: View {
         appState.isMenuPresented = false
     }
 
+    private func snoozePR(_ pr: PullRequest, duration: SnoozeDuration) {
+        appState.snoozeManager.snooze(pr, duration: duration)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             PRSection(
                 title: "Needs my review",
-                prs: appState.needsReview,
+                prs: appState.visibleNeedsReview,
                 isExpanded: appState.bindingForSection("needsReview"),
                 statusColorOverride: .gitHubOrange,
-                onOpenPR: dismissMenu
+                onOpenPR: dismissMenu,
+                onSnoozePR: snoozePR
             )
 
             PRSection(
                 title: "Waiting for review",
-                prs: appState.waitingForReviewers,
+                prs: appState.visibleWaitingForReviewers,
                 isExpanded: appState.bindingForSection("waitingForReviewers"),
                 onOpenPR: dismissMenu
             )
 
             PRSection(
                 title: "Approved",
-                prs: appState.approved,
+                prs: appState.visibleApproved,
                 isExpanded: appState.bindingForSection("approved"),
                 onOpenPR: dismissMenu
             )
 
             PRSection(
                 title: "Returned to me",
-                prs: appState.changesRequested,
+                prs: appState.visibleChangesRequested,
                 isExpanded: appState.bindingForSection("changesRequested"),
                 onOpenPR: dismissMenu
             )
 
             PRSection(
                 title: "Reviewed",
-                prs: appState.myChangesRequested,
+                prs: appState.visibleMyChangesRequested,
                 isExpanded: appState.bindingForSection("myChangesRequested"),
-                onOpenPR: dismissMenu
+                onOpenPR: dismissMenu,
+                onSnoozePR: snoozePR
             )
 
             PRSection(
                 title: "Drafts",
-                prs: appState.drafts,
+                prs: appState.visibleDrafts,
                 isExpanded: appState.bindingForSection("drafts"),
                 onOpenPR: dismissMenu
             )
+
+            if !appState.snoozedPRs.isEmpty {
+                PRSection(
+                    title: "Snoozed",
+                    prs: appState.snoozedPRs,
+                    isExpanded: appState.bindingForSection("snoozed"),
+                    onOpenPR: dismissMenu,
+                    onUnsnoozePR: { pr in appState.snoozeManager.unsnooze(prID: pr.id) }
+                )
+            }
 
             Divider()
                 .padding(.vertical, 4)

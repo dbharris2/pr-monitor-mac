@@ -10,6 +10,8 @@ struct PRSection: View {
     @Binding var isExpanded: Bool
     var statusColorOverride: Color?
     var onOpenPR: (() -> Void)?
+    var onSnoozePR: ((PullRequest, SnoozeDuration) -> Void)?
+    var onUnsnoozePR: ((PullRequest) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -35,7 +37,13 @@ struct PRSection: View {
 
             if isExpanded, !prs.isEmpty {
                 ForEach(prs) { pr in
-                    PRRow(pr: pr, statusColorOverride: statusColorOverride, onOpen: onOpenPR)
+                    PRRow(
+                        pr: pr,
+                        statusColorOverride: statusColorOverride,
+                        onOpen: onOpenPR,
+                        onSnooze: onSnoozePR.map { callback in { pr, duration in callback(pr, duration) } },
+                        onUnsnooze: onUnsnoozePR.map { callback in { pr in callback(pr) } }
+                    )
                 }
             }
         }
@@ -46,6 +54,8 @@ struct PRRow: View {
     let pr: PullRequest
     var statusColorOverride: Color?
     var onOpen: (() -> Void)?
+    var onSnooze: ((PullRequest, SnoozeDuration) -> Void)?
+    var onUnsnooze: ((PullRequest) -> Void)?
     @State private var isHovered = false
 
     private var statusColor: Color {
@@ -147,6 +157,18 @@ struct PRRow: View {
         .buttonStyle(.plain)
         .onHover { hovering in
             isHovered = hovering
+        }
+        .contextMenu {
+            if let onSnooze {
+                Menu("Snooze") {
+                    ForEach(SnoozeDuration.allCases, id: \.self) { duration in
+                        Button(duration.displayName) { onSnooze(pr, duration) }
+                    }
+                }
+            }
+            if let onUnsnooze {
+                Button("Un-snooze") { onUnsnooze(pr) }
+            }
         }
     }
 }
