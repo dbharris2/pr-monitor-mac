@@ -12,6 +12,7 @@ class AppState: ObservableObject {
     @Published var myChangesRequested: [PullRequest] = []
     @Published var drafts: [PullRequest] = []
 
+    @Published var snoozeManager = SnoozeManager()
     @Published var isLoading = false
     @Published var lastUpdated: Date?
     @Published var error: String?
@@ -28,7 +29,8 @@ class AppState: ObservableObject {
         "approved": false,
         "changesRequested": true,
         "myChangesRequested": true,
-        "drafts": false
+        "drafts": false,
+        "snoozed": false
     ]
 
     func bindingForSection(_ key: String) -> Binding<Bool> {
@@ -44,17 +46,51 @@ class AppState: ObservableObject {
 
     private let gitHubService: GitHubServiceProtocol
     private var pollTimer: Timer?
+    private var snoozeCancellable: AnyCancellable?
     private var notifiedPRIds: Set<String> = []
     private var previousApprovedIds: Set<String> = []
     private var previousChangesRequestedIds: Set<String> = []
     private var isFirstLoad = true
 
+    var visibleNeedsReview: [PullRequest] {
+        needsReview.filter { !snoozeManager.snoozedIDs.contains($0.id) }
+    }
+
+    var visibleWaitingForReviewers: [PullRequest] {
+        waitingForReviewers.filter { !snoozeManager.snoozedIDs.contains($0.id) }
+    }
+
+    var visibleApproved: [PullRequest] {
+        approved.filter { !snoozeManager.snoozedIDs.contains($0.id) }
+    }
+
+    var visibleChangesRequested: [PullRequest] {
+        changesRequested.filter { !snoozeManager.snoozedIDs.contains($0.id) }
+    }
+
+    var visibleMyChangesRequested: [PullRequest] {
+        myChangesRequested.filter { !snoozeManager.snoozedIDs.contains($0.id) }
+    }
+
+    var visibleDrafts: [PullRequest] {
+        drafts.filter { !snoozeManager.snoozedIDs.contains($0.id) }
+    }
+
+    var snoozedPRs: [PullRequest] {
+        let snoozedIDs = snoozeManager.snoozedIDs
+        let allPRs = needsReview + waitingForReviewers + approved + changesRequested + myChangesRequested + drafts
+        return allPRs.filter { snoozedIDs.contains($0.id) }.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+    }
+
     var needsReviewCount: Int {
-        needsReview.count
+        visibleNeedsReview.count
     }
 
     init(service: GitHubServiceProtocol = GitHubService(), startAutomatically: Bool = true) {
         self.gitHubService = service
+        snoozeCancellable = snoozeManager.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
         guard startAutomatically else { return }
         startPolling()
         observeWake()
@@ -172,6 +208,7 @@ class AppState: ObservableObject {
     func refresh() async {
         guard !isLoading else { return }
 
+        snoozeManager.cleanExpired()
         isLoading = true
         error = nil
 
@@ -180,7 +217,8 @@ class AppState: ObservableObject {
 
             // Check for new PRs needing review (skip on first load)
             if !isFirstLoad, notificationsEnabled {
-                let newPRs = results.needsReview.filter { !notifiedPRIds.contains($0.id) }
+                let snoozedIDs = snoozeManager.snoozedIDs
+                let newPRs = results.needsReview.filter { !notifiedPRIds.contains($0.id) && !snoozedIDs.contains($0.id) }
                 if newPRs.count == 1 {
                     sendReviewRequestedNotification(for: newPRs[0])
                 } else if newPRs.count > 1 {
@@ -188,13 +226,14 @@ class AppState: ObservableObject {
                 }
 
                 // Check for newly approved PRs
-                let newlyApproved = results.approved.filter { !previousApprovedIds.contains($0.id) }
+                let newlyApproved = results.approved.filter { !previousApprovedIds.contains($0.id) && !snoozedIDs.contains($0.id) }
                 for pr in newlyApproved {
                     sendApprovedNotification(for: pr)
                 }
 
                 // Check for PRs with newly requested changes
-                let newlyChangesRequested = results.changesRequested.filter { !previousChangesRequestedIds.contains($0.id) }
+                let newlyChangesRequested = results.changesRequested
+                    .filter { !previousChangesRequestedIds.contains($0.id) && !snoozedIDs.contains($0.id) }
                 for pr in newlyChangesRequested {
                     sendChangesRequestedNotification(for: pr)
                 }
