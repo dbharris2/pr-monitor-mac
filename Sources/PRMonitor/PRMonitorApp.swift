@@ -207,6 +207,8 @@ struct MenuContent: View {
                 title: "Needs my review",
                 prs: appState.visibleNeedsReview,
                 isExpanded: appState.bindingForSection("needsReview"),
+                sectionIcon: .asset("CodeReviewIcon"),
+                sectionColor: .gitHubOrange,
                 statusColorOverride: .gitHubOrange,
                 onOpenPR: dismissMenu,
                 onSnoozePR: snoozePR
@@ -216,6 +218,9 @@ struct MenuContent: View {
                 title: "Returned to me",
                 prs: appState.visibleChangesRequested,
                 isExpanded: appState.bindingForSection("changesRequested"),
+                sectionIcon: .asset("FileDiffIcon"),
+                sectionColor: .red,
+                showTopSeparator: true,
                 onOpenPR: dismissMenu
             )
 
@@ -223,6 +228,9 @@ struct MenuContent: View {
                 title: "Approved",
                 prs: appState.visibleApproved,
                 isExpanded: appState.bindingForSection("approved"),
+                sectionIcon: .sfSymbol("checkmark.circle.fill"),
+                sectionColor: .green,
+                showTopSeparator: true,
                 onOpenPR: dismissMenu
             )
 
@@ -230,6 +238,9 @@ struct MenuContent: View {
                 title: "Waiting for review",
                 prs: appState.visibleWaitingForReviewers,
                 isExpanded: appState.bindingForSection("waitingForReviewers"),
+                sectionIcon: .asset("HourglassIcon"),
+                sectionColor: .blue,
+                showTopSeparator: true,
                 onOpenPR: dismissMenu
             )
 
@@ -237,6 +248,9 @@ struct MenuContent: View {
                 title: "Reviewed",
                 prs: appState.visibleMyChangesRequested,
                 isExpanded: appState.bindingForSection("myChangesRequested"),
+                sectionIcon: .sfSymbol("text.bubble.fill"),
+                sectionColor: .purple,
+                showTopSeparator: true,
                 onOpenPR: dismissMenu,
                 onSnoozePR: snoozePR
             )
@@ -245,6 +259,9 @@ struct MenuContent: View {
                 title: "Drafts",
                 prs: appState.visibleDrafts,
                 isExpanded: appState.bindingForSection("drafts"),
+                sectionIcon: .sfSymbol("doc.text.fill"),
+                sectionColor: .secondary,
+                showTopSeparator: true,
                 onOpenPR: dismissMenu
             )
 
@@ -253,6 +270,9 @@ struct MenuContent: View {
                     title: "Snoozed",
                     prs: appState.snoozedPRs,
                     isExpanded: appState.bindingForSection("snoozed"),
+                    sectionIcon: .sfSymbol("moon.fill"),
+                    sectionColor: .yellow,
+                    showTopSeparator: true,
                     onOpenPR: dismissMenu,
                     onUnsnoozePR: { pr in appState.snoozeManager.unsnooze(prID: pr.id) }
                 )

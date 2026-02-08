@@ -4,10 +4,18 @@ extension Color {
     static let gitHubOrange = Color(red: 247 / 255, green: 129 / 255, blue: 102 / 255)
 }
 
+enum SectionIcon {
+    case sfSymbol(String)
+    case asset(String)
+}
+
 struct PRSection: View {
     let title: String
     let prs: [PullRequest]
     @Binding var isExpanded: Bool
+    var sectionIcon: SectionIcon?
+    var sectionColor: Color?
+    var showTopSeparator: Bool = false
     var statusColorOverride: Color?
     var onOpenPR: (() -> Void)?
     var onSnoozePR: ((PullRequest, SnoozeDuration) -> Void)?
@@ -15,19 +23,72 @@ struct PRSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if showTopSeparator {
+                Divider()
+                    .padding(.horizontal, 12)
+            }
+
             Button {
                 isExpanded.toggle()
             } label: {
-                HStack {
+                HStack(spacing: 6) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 12)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 10)
 
-                    Text("\(title) (\(prs.count))")
+                    if let sectionIcon {
+                        switch sectionIcon {
+                        case let .sfSymbol(name):
+                            if prs.isEmpty {
+                                Image(systemName: name)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.tertiary)
+                                    .frame(width: 16)
+                            } else {
+                                Image(systemName: name)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(sectionColor ?? .primary)
+                                    .frame(width: 16)
+                            }
+                        case let .asset(name):
+                            if prs.isEmpty {
+                                Image(name)
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 14, height: 14)
+                                    .foregroundStyle(.tertiary)
+                            } else {
+                                Image(name)
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 14, height: 14)
+                                    .foregroundStyle(sectionColor ?? .primary)
+                            }
+                        }
+                    }
+
+                    Text(title)
+                        .font(.headline)
+                        .fontWeight(.medium)
                         .foregroundStyle(prs.isEmpty ? .secondary : .primary)
 
                     Spacer()
+
+                    if !prs.isEmpty, let sectionColor {
+                        Text("\(prs.count)")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(sectionColor)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 1)
+                            .background(
+                                Capsule()
+                                    .fill(sectionColor.opacity(0.15))
+                            )
+                    }
                 }
                 .contentShape(Rectangle())
             }
@@ -249,7 +310,7 @@ func relativeTime(from date: Date) -> String {
 #Preview {
     VStack {
         PRSection(
-            title: "Needs your review",
+            title: "Needs my review",
             prs: [
                 PullRequest(
                     id: "1",
@@ -274,13 +335,18 @@ func relativeTime(from date: Date) -> String {
                     ]
                 )
             ],
-            isExpanded: .constant(true)
+            isExpanded: .constant(true),
+            sectionIcon: .asset("CodeReviewIcon"),
+            sectionColor: .gitHubOrange
         )
 
         PRSection(
             title: "Drafts",
             prs: [],
-            isExpanded: .constant(false)
+            isExpanded: .constant(false),
+            sectionIcon: .sfSymbol("doc.text.fill"),
+            sectionColor: .secondary,
+            showTopSeparator: true
         )
     }
     .frame(width: 380)
