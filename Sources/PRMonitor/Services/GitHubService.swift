@@ -50,9 +50,9 @@ actor GitHubService: GitHubServiceProtocol {
 
         var results = PRFetchResults()
 
-        // PRs where I'm requested to review (exclude approved and changes_requested)
+        // PRs where I'm requested to review (exclude drafts, approved, and changes_requested)
         results.needsReview = reviewPRs.filter { pr in
-            pr.reviewDecision != .approved && pr.reviewDecision != .changesRequested
+            !pr.isDraft && pr.reviewDecision != .approved && pr.reviewDecision != .changesRequested
         }
 
         // PRs I authored
