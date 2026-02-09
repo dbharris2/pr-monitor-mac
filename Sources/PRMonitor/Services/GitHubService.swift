@@ -41,7 +41,7 @@ actor GitHubService: GitHubServiceProtocol {
     }
 
     func fetchAllPRs(token: String) async throws -> PRFetchResults {
-        async let needsReview = fetchPRs(query: "is:pr is:open review-requested:@me", token: token)
+        async let needsReview = fetchPRs(query: "is:pr is:open -is:draft review-requested:@me", token: token)
         async let authored = fetchPRs(query: "is:pr is:open author:@me", token: token)
         // PRs I've reviewed that aren't approved (includes changes_requested and pending)
         async let reviewed = fetchPRs(query: "is:pr is:open -is:draft reviewed-by:@me -author:@me -review:approved", token: token)
