@@ -69,12 +69,15 @@ actor GitHubService: GitHubServiceProtocol {
         }
 
         // "Reviewed" section: PRs I've reviewed OR PRs where I'm requested but has changes_requested
+        // Exclude PRs already in "Needs my review" (re-requested after previous review)
+        let needsReviewIDs = Set(results.needsReview.map(\.id))
         let requestedWithChanges = reviewPRs.filter { $0.reviewDecision == .changesRequested }
 
-        // Combine and dedupe by ID
+        // Combine and dedupe by ID, excluding PRs that need my review
         var seen = Set<String>()
         var combined: [PullRequest] = []
-        for pr in reviewedPRs + requestedWithChanges where seen.insert(pr.id).inserted {
+        for pr in reviewedPRs + requestedWithChanges
+            where seen.insert(pr.id).inserted && !needsReviewIDs.contains(pr.id) {
             combined.append(pr)
         }
         results.myChangesRequested = combined
