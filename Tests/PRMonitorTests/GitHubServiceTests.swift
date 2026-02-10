@@ -311,6 +311,30 @@ final class GitHubServiceTests: XCTestCase {
         }
     }
 
+    // MARK: Re-requested Review Exclusion
+
+    func testReReviewRequestedExcludedFromReviewed() async throws {
+        // PR was previously reviewed, then author re-requested review.
+        // It appears in both review-requested:@me and reviewed-by:@me queries.
+        let reRequested = prNode(id: "pr-rerequested", number: 40, title: "Re-requested PR", reviewDecision: "REVIEW_REQUIRED")
+
+        installHandlers(
+            reviewRequested: [reRequested],
+            authored: [],
+            reviewed: [reRequested]
+        )
+
+        let service = GitHubService(session: makeSession())
+        let results = try await service.fetchAllPRs(token: "test-token")
+
+        // Should appear in needsReview
+        XCTAssertEqual(results.needsReview.count, 1)
+        XCTAssertEqual(results.needsReview.first?.id, "pr-rerequested")
+
+        // Should NOT appear in reviewed (myChangesRequested)
+        XCTAssertEqual(results.myChangesRequested.count, 0)
+    }
+
     // MARK: Needs Review Filters Out Approved/ChangesRequested
 
     func testNeedsReviewFiltersApprovedAndChangesRequested() async throws {
