@@ -7,6 +7,7 @@ A macOS menu bar app for monitoring GitHub pull requests.
 - macOS 26+ (to build)
 - Xcode 26+ (Swift 6.2)
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+- [GitHub CLI (`gh`)](https://cli.github.com), authenticated via `gh auth login`
 
 The app runs on macOS 14+.
 
@@ -28,11 +29,15 @@ just xcode
 
 ## Setup
 
-1. Run the app (it appears in your menu bar)
-2. Click the menu bar icon and go to **Settings**
-3. Add your GitHub personal access token
-   - Create one at GitHub → Settings → Developer settings → Personal access tokens
-   - Needs `repo` scope for private repos
+PR Monitor uses your existing GitHub CLI authentication — no token setup in the app.
+
+1. Install and sign in to the GitHub CLI:
+   ```bash
+   brew install gh
+   gh auth login
+   ```
+2. Run PR Monitor (it appears in your menu bar). It picks up your `gh` credentials automatically.
+3. If `gh` isn't installed or you're not signed in, the menu bar Settings panel will show install/sign-in instructions.
 
 ## Features
 

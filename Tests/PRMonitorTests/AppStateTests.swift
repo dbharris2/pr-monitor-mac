@@ -31,6 +31,48 @@ private actor MockGitHubService: GitHubServiceProtocol {
     }
 }
 
+// MARK: - Mock GHCommand
+
+private final actor MockGHCommand: GHCommandProtocol {
+    enum Mode {
+        case authenticated(login: String)
+        case notAuthenticated
+        case missing
+    }
+
+    var mode: Mode = .authenticated(login: "tester")
+
+    func setMode(_ mode: Mode) {
+        self.mode = mode
+    }
+
+    func resolveBinary() async throws -> URL {
+        switch mode {
+        case .missing: throw GHCommand.GHError.ghNotFound
+        case .authenticated, .notAuthenticated:
+            return URL(fileURLWithPath: "/mock/gh")
+        }
+    }
+
+    func invalidatePath() async {}
+
+    func run(arguments _: [String], stdin _: Data?, timeout _: TimeInterval) async throws -> GHCommand.RunResult {
+        let data = try await runExpectingSuccess(arguments: [], stdin: nil, timeout: 0)
+        return GHCommand.RunResult(exitCode: 0, stdout: data, stderr: "")
+    }
+
+    func runExpectingSuccess(arguments _: [String], stdin _: Data?, timeout _: TimeInterval) async throws -> Data {
+        switch mode {
+        case let .authenticated(login):
+            return Data(login.utf8)
+        case .notAuthenticated:
+            throw GHCommand.GHError.nonZeroExit(code: 1, stderr: "authentication required")
+        case .missing:
+            throw GHCommand.GHError.ghNotFound
+        }
+    }
+}
+
 // MARK: - Helpers
 
 private func makePR(
@@ -66,17 +108,22 @@ private func makePR(
 @MainActor
 final class AppStateTests: XCTestCase {
     private var mockService: MockGitHubService!
+    private var mockGH: MockGHCommand!
     private var appState: AppState!
 
     override func setUp() async throws {
         try await super.setUp()
         mockService = MockGitHubService()
-        appState = AppState(service: mockService, startAutomatically: false)
+        mockGH = MockGHCommand()
+        appState = AppState(service: mockService, gh: mockGH, startAutomatically: false)
+        // Default: tests run as if gh CLI is healthy.
+        appState.ghAuthStatus = .authenticated(login: "tester")
     }
 
     override func tearDown() async throws {
         appState = nil
         mockService = nil
+        mockGH = nil
         try await super.tearDown()
     }
 
@@ -127,18 +174,18 @@ final class AppStateTests: XCTestCase {
     // MARK: refresh() sets error on failure
 
     func testRefreshSetsErrorOnFailure() async throws {
-        await mockService.configure(error: GitHubService.GitHubError.noToken)
+        await mockService.configure(error: GitHubService.GitHubError.ghNotAuthenticated)
         await appState.refresh()
 
         XCTAssertNotNil(appState.error)
-        XCTAssertTrue(try XCTUnwrap(appState.error?.contains("No GitHub token")))
+        XCTAssertTrue(try XCTUnwrap(appState.error?.contains("gh auth login")))
     }
 
     // MARK: refresh() clears error on success
 
     func testRefreshClearsErrorOnSuccess() async {
         // First, set an error
-        await mockService.configure(error: GitHubService.GitHubError.noToken)
+        await mockService.configure(error: GitHubService.GitHubError.ghNotAuthenticated)
         await appState.refresh()
         XCTAssertNotNil(appState.error)
 
@@ -146,6 +193,44 @@ final class AppStateTests: XCTestCase {
         await mockService.configure(result: PRFetchResults())
         await appState.refresh()
         XCTAssertNil(appState.error)
+    }
+
+    // MARK: refresh() short-circuits when gh missing
+
+    func testRefreshShortCircuitsWhenGHMissing() async {
+        appState.ghAuthStatus = .ghMissing
+        await mockGH.setMode(.missing)
+        await mockService.configure(result: PRFetchResults())
+
+        await appState.refresh()
+
+        let callCount = await mockService.fetchCallCount
+        XCTAssertEqual(callCount, 0, "Service should not be called when gh is missing")
+        XCTAssertNotNil(appState.error)
+        XCTAssertTrue(appState.error?.contains("brew install gh") ?? false)
+    }
+
+    // MARK: refreshAuthStatus()
+
+    func testRefreshAuthStatusAuthenticated() async {
+        await mockGH.setMode(.authenticated(login: "octocat"))
+        await appState.refreshAuthStatus()
+
+        XCTAssertEqual(appState.ghAuthStatus, .authenticated(login: "octocat"))
+    }
+
+    func testRefreshAuthStatusMissing() async {
+        await mockGH.setMode(.missing)
+        await appState.refreshAuthStatus()
+
+        XCTAssertEqual(appState.ghAuthStatus, .ghMissing)
+    }
+
+    func testRefreshAuthStatusNotAuthenticated() async {
+        await mockGH.setMode(.notAuthenticated)
+        await appState.refreshAuthStatus()
+
+        XCTAssertEqual(appState.ghAuthStatus, .notAuthenticated)
     }
 
     // MARK: refresh() guards against concurrent loads

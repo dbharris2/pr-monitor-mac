@@ -1,11 +1,25 @@
 import MenuBarExtraAccess
+import Security
 import SwiftUI
 import UserNotifications
 
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        Keychain.migrateFromUserDefaultsIfNeeded()
+        cleanupLegacyTokenStorage()
         UNUserNotificationCenter.current().delegate = self
+    }
+
+    private func cleanupLegacyTokenStorage() {
+        let key = "didCleanupLegacyKeychain"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.prmonitor.app",
+            kSecAttrAccount as String: "github-token",
+        ]
+        SecItemDelete(query as CFDictionary)
+        UserDefaults.standard.removeObject(forKey: "github-token")
+        UserDefaults.standard.set(true, forKey: key)
     }
 
     func userNotificationCenter(

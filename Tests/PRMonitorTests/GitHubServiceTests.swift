@@ -1,53 +1,45 @@
 @testable import PRMonitor
 import XCTest
 
-// MARK: - URLProtocol Mock
+// MARK: - GHCommand Mock
 
-private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
-    nonisolated(unsafe) static var handlers: [(URLRequest) -> (Data, HTTPURLResponse)?] = []
+/// Routes `gh api` calls to canned responses based on the GraphQL query passed via stdin.
+private final actor MockGHCommand: GHCommandProtocol {
+    typealias Handler = @Sendable (_ arguments: [String], _ stdin: Data?) -> Result<Data, GHCommand.GHError>?
 
-    // swiftlint:disable:next static_over_final_class
-    override class func canInit(with request: URLRequest) -> Bool {
-        true
+    private var handlers: [Handler] = []
+    private(set) var callCount = 0
+
+    func install(handlers: [Handler]) {
+        self.handlers = handlers
     }
 
-    // swiftlint:disable:next static_over_final_class
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
-        request
+    func resolveBinary() async throws -> URL {
+        URL(fileURLWithPath: "/mock/gh")
     }
 
-    override func startLoading() {
-        for handler in Self.handlers {
-            if let (data, response) = handler(request) {
-                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-                client?.urlProtocol(self, didLoad: data)
-                client?.urlProtocolDidFinishLoading(self)
-                return
+    func invalidatePath() async {}
+
+    func run(arguments: [String], stdin: Data?, timeout _: TimeInterval) async throws -> GHCommand.RunResult {
+        let data = try await runExpectingSuccess(arguments: arguments, stdin: stdin, timeout: 0)
+        return GHCommand.RunResult(exitCode: 0, stdout: data, stderr: "")
+    }
+
+    func runExpectingSuccess(arguments: [String], stdin: Data?, timeout _: TimeInterval) async throws -> Data {
+        callCount += 1
+        for handler in handlers {
+            if let result = handler(arguments, stdin) {
+                switch result {
+                case let .success(data): return data
+                case let .failure(error): throw error
+                }
             }
         }
-        client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+        throw GHCommand.GHError.nonZeroExit(code: 1, stderr: "no mock handler matched")
     }
-
-    override func stopLoading() {}
 }
 
 // MARK: - Helpers
-
-private let graphQLURL = URL(string: "https://api.github.com/graphql")!
-
-private func makeSession() -> URLSession {
-    let config = URLSessionConfiguration.ephemeral
-    config.protocolClasses = [MockURLProtocol.self]
-    return URLSession(configuration: config)
-}
-
-private func okResponse() -> HTTPURLResponse {
-    HTTPURLResponse(url: graphQLURL, statusCode: 200, httpVersion: nil, headerFields: nil)!
-}
-
-private func errorResponse(statusCode: Int) -> HTTPURLResponse {
-    HTTPURLResponse(url: graphQLURL, statusCode: statusCode, httpVersion: nil, headerFields: nil)!
-}
 
 /// Build a GraphQL JSON response with the given PR nodes.
 private func graphQLJSON(nodes: [[String: Any]]) -> Data {
@@ -104,100 +96,76 @@ private func prNode(
     return node
 }
 
-/// Extract the search query string from a URLRequest body.
-private func queryString(from request: URLRequest) -> String? {
-    let data: Data?
-    if let body = request.httpBody {
-        data = body
-    } else if let stream = request.httpBodyStream {
-        stream.open()
-        let bufferSize = 65536
-        var buffer = [UInt8](repeating: 0, count: bufferSize)
-        var result = Data()
-        while stream.hasBytesAvailable {
-            let bytesRead = stream.read(&buffer, maxLength: bufferSize)
-            if bytesRead > 0 {
-                result.append(buffer, count: bytesRead)
-            } else {
-                break
-            }
-        }
-        stream.close()
-        data = result
-    } else {
-        data = nil
-    }
-    guard let data,
-          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-          let query = json["query"] as? String
-    else { return nil }
-    return query
+/// Extract the GraphQL query string from the stdin payload that `fetchPRs` sends.
+private func queryString(from stdin: Data?) -> String? {
+    guard let stdin else { return nil }
+    return String(data: stdin, encoding: .utf8)
 }
 
 /// Install handlers for the three queries used by `fetchAllPRs`.
-/// - Parameters:
-///   - reviewRequested: Nodes for the "review-requested:@me" query
-///   - authored: Nodes for the "author:@me" query
-///   - reviewed: Nodes for the "reviewed-by:@me" query
 private func installHandlers(
+    on mock: MockGHCommand,
     reviewRequested: [[String: Any]],
     authored: [[String: Any]],
     reviewed: [[String: Any]]
-) {
-    MockURLProtocol.handlers = [
-        { request -> (Data, HTTPURLResponse)? in
-            guard let q = queryString(from: request), q.contains("review-requested:@me") else { return nil }
-            return (graphQLJSON(nodes: reviewRequested), okResponse())
+) async {
+    // Pre-serialize so the @Sendable handlers only capture Sendable Data.
+    let reviewRequestedData = graphQLJSON(nodes: reviewRequested)
+    let authoredData = graphQLJSON(nodes: authored)
+    let reviewedData = graphQLJSON(nodes: reviewed)
+
+    let handlers: [MockGHCommand.Handler] = [
+        { args, stdin in
+            guard args.contains("graphql"),
+                  let q = queryString(from: stdin),
+                  q.contains("review-requested:@me") else { return nil }
+            return .success(reviewRequestedData)
         },
-        { request -> (Data, HTTPURLResponse)? in
-            guard let q = queryString(from: request), q.contains("reviewed-by:@me") else { return nil }
-            return (graphQLJSON(nodes: reviewed), okResponse())
+        { args, stdin in
+            guard args.contains("graphql"),
+                  let q = queryString(from: stdin),
+                  q.contains("reviewed-by:@me") else { return nil }
+            return .success(reviewedData)
         },
-        { request -> (Data, HTTPURLResponse)? in
-            guard let q = queryString(from: request), q.contains("author:@me") else { return nil }
-            return (graphQLJSON(nodes: authored), okResponse())
+        { args, stdin in
+            guard args.contains("graphql"),
+                  let q = queryString(from: stdin),
+                  q.contains("author:@me") else { return nil }
+            return .success(authoredData)
         },
     ]
+    await mock.install(handlers: handlers)
 }
 
 // MARK: - Tests
 
 final class GitHubServiceTests: XCTestCase {
-    override func tearDown() {
-        MockURLProtocol.handlers = []
-        super.tearDown()
-    }
-
     // MARK: PR Categorization
 
     func testValidResponseCategorizesCorrectly() async throws {
-        // review-requested:@me → one PR with no decision (needs review)
         let reviewRequested = prNode(
             id: "pr-1", number: 1, title: "Review me", reviewDecision: nil,
             additions: 150, deletions: 30, changedFiles: 5, totalCommentsCount: 3
         )
-
-        // author:@me → one approved, one changes_requested, one waiting
         let authorApproved = prNode(id: "pr-2", number: 2, title: "Approved PR", reviewDecision: "APPROVED")
         let authorChanges = prNode(id: "pr-3", number: 3, title: "Changes PR", reviewDecision: "CHANGES_REQUESTED")
         let authorWaiting = prNode(id: "pr-4", number: 4, title: "Waiting PR", reviewDecision: "REVIEW_REQUIRED")
-
-        // reviewed-by:@me → one PR I reviewed
         let reviewed = prNode(id: "pr-5", number: 5, title: "Reviewed by me")
 
-        installHandlers(
+        let mock = MockGHCommand()
+        await installHandlers(
+            on: mock,
             reviewRequested: [reviewRequested],
             authored: [authorApproved, authorChanges, authorWaiting],
             reviewed: [reviewed]
         )
 
-        let service = GitHubService(session: makeSession())
-        let results = try await service.fetchAllPRs(token: "test-token")
+        let service = GitHubService(gh: mock)
+        let results = try await service.fetchAllPRs()
 
         XCTAssertEqual(results.needsReview.count, 1)
         XCTAssertEqual(results.needsReview.first?.id, "pr-1")
 
-        // Verify stats are parsed correctly
         let pr1 = try XCTUnwrap(results.needsReview.first)
         XCTAssertEqual(pr1.additions, 150)
         XCTAssertEqual(pr1.deletions, 30)
@@ -223,22 +191,17 @@ final class GitHubServiceTests: XCTestCase {
         let draft = prNode(id: "pr-draft", number: 10, title: "Draft PR", isDraft: true)
         let nonDraft = prNode(id: "pr-nondraft", number: 11, title: "Non-draft PR", reviewDecision: "REVIEW_REQUIRED")
 
-        installHandlers(
-            reviewRequested: [],
-            authored: [draft, nonDraft],
-            reviewed: []
-        )
+        let mock = MockGHCommand()
+        await installHandlers(on: mock, reviewRequested: [], authored: [draft, nonDraft], reviewed: [])
 
-        let service = GitHubService(session: makeSession())
-        let results = try await service.fetchAllPRs(token: "test-token")
+        let service = GitHubService(gh: mock)
+        let results = try await service.fetchAllPRs()
 
-        // Draft should be excluded from all authored categories
         XCTAssertEqual(results.approved.count, 0)
         XCTAssertEqual(results.changesRequested.count, 0)
         XCTAssertEqual(results.waitingForReviewers.count, 1)
         XCTAssertEqual(results.waitingForReviewers.first?.id, "pr-nondraft")
 
-        // Draft should appear in drafts
         XCTAssertEqual(results.drafts.count, 1)
         XCTAssertEqual(results.drafts.first?.id, "pr-draft")
     }
@@ -246,23 +209,16 @@ final class GitHubServiceTests: XCTestCase {
     // MARK: Dedup in myChangesRequested
 
     func testMyChangesRequestedDeduplicates() async throws {
-        // Same PR appears in both reviewed-by and review-requested (with changes_requested)
         let sharedPR = prNode(id: "pr-shared", number: 20, title: "Shared PR", reviewDecision: "CHANGES_REQUESTED")
 
-        installHandlers(
-            reviewRequested: [sharedPR],
-            authored: [],
-            reviewed: [sharedPR]
-        )
+        let mock = MockGHCommand()
+        await installHandlers(on: mock, reviewRequested: [sharedPR], authored: [], reviewed: [sharedPR])
 
-        let service = GitHubService(session: makeSession())
-        let results = try await service.fetchAllPRs(token: "test-token")
+        let service = GitHubService(gh: mock)
+        let results = try await service.fetchAllPRs()
 
-        // Should appear only once in myChangesRequested, not twice
         XCTAssertEqual(results.myChangesRequested.count, 1)
         XCTAssertEqual(results.myChangesRequested.first?.id, "pr-shared")
-
-        // Should NOT appear in needsReview (filtered out because reviewDecision == .changesRequested)
         XCTAssertEqual(results.needsReview.count, 0)
     }
 
@@ -274,13 +230,12 @@ final class GitHubServiceTests: XCTestCase {
         ]
         let errorData = try JSONSerialization.data(withJSONObject: errorJSON)
 
-        MockURLProtocol.handlers = [
-            { _ in (errorData, okResponse()) },
-        ]
+        let mock = MockGHCommand()
+        await mock.install(handlers: [{ _, _ in .success(errorData) }])
 
-        let service = GitHubService(session: makeSession())
+        let service = GitHubService(gh: mock)
         do {
-            _ = try await service.fetchAllPRs(token: "bad-token")
+            _ = try await service.fetchAllPRs()
             XCTFail("Expected apiError to be thrown")
         } catch let error as GitHubService.GitHubError {
             if case let .apiError(message) = error {
@@ -291,22 +246,44 @@ final class GitHubServiceTests: XCTestCase {
         }
     }
 
-    // MARK: Non-200 Status
+    // MARK: Subprocess failure surfaces as subprocessFailed
 
-    func testNon200StatusThrows() async throws {
-        MockURLProtocol.handlers = [
-            { _ in (Data(), errorResponse(statusCode: 403)) },
-        ]
+    func testSubprocessFailureThrows() async throws {
+        let mock = MockGHCommand()
+        await mock.install(handlers: [
+            { _, _ in .failure(.nonZeroExit(code: 1, stderr: "API rate limit exceeded")) },
+        ])
 
-        let service = GitHubService(session: makeSession())
+        let service = GitHubService(gh: mock)
         do {
-            _ = try await service.fetchAllPRs(token: "test-token")
-            XCTFail("Expected invalidResponse to be thrown")
+            _ = try await service.fetchAllPRs()
+            XCTFail("Expected subprocessFailed to be thrown")
         } catch let error as GitHubService.GitHubError {
-            if case let .invalidResponse(code) = error {
-                XCTAssertEqual(code, 403)
+            if case let .subprocessFailed(message) = error {
+                XCTAssertTrue(message.contains("rate limit"))
             } else {
-                XCTFail("Expected .invalidResponse, got \(error)")
+                XCTFail("Expected .subprocessFailed, got \(error)")
+            }
+        }
+    }
+
+    // MARK: Authentication error mapping
+
+    func testAuthErrorMapsToNotAuthenticated() async throws {
+        let mock = MockGHCommand()
+        await mock.install(handlers: [
+            { _, _ in .failure(.nonZeroExit(code: 1, stderr: "authentication required")) },
+        ])
+
+        let service = GitHubService(gh: mock)
+        do {
+            _ = try await service.fetchAllPRs()
+            XCTFail("Expected ghNotAuthenticated to be thrown")
+        } catch let error as GitHubService.GitHubError {
+            if case .ghNotAuthenticated = error {
+                // expected
+            } else {
+                XCTFail("Expected .ghNotAuthenticated, got \(error)")
             }
         }
     }
@@ -314,24 +291,16 @@ final class GitHubServiceTests: XCTestCase {
     // MARK: Re-requested Review Exclusion
 
     func testReReviewRequestedExcludedFromReviewed() async throws {
-        // PR was previously reviewed, then author re-requested review.
-        // It appears in both review-requested:@me and reviewed-by:@me queries.
         let reRequested = prNode(id: "pr-rerequested", number: 40, title: "Re-requested PR", reviewDecision: "REVIEW_REQUIRED")
 
-        installHandlers(
-            reviewRequested: [reRequested],
-            authored: [],
-            reviewed: [reRequested]
-        )
+        let mock = MockGHCommand()
+        await installHandlers(on: mock, reviewRequested: [reRequested], authored: [], reviewed: [reRequested])
 
-        let service = GitHubService(session: makeSession())
-        let results = try await service.fetchAllPRs(token: "test-token")
+        let service = GitHubService(gh: mock)
+        let results = try await service.fetchAllPRs()
 
-        // Should appear in needsReview
         XCTAssertEqual(results.needsReview.count, 1)
         XCTAssertEqual(results.needsReview.first?.id, "pr-rerequested")
-
-        // Should NOT appear in reviewed (myChangesRequested)
         XCTAssertEqual(results.myChangesRequested.count, 0)
     }
 
@@ -353,7 +322,6 @@ final class GitHubServiceTests: XCTestCase {
                 "avatarUrl": "https://avatars.githubusercontent.com/t/1?v=4",
             ],
         ]
-        // Same slug as a user login should not collide — kept as separate entries.
         let collidingUserReq: [String: Any] = [
             "requestedReviewer": [
                 "__typename": "User",
@@ -367,10 +335,11 @@ final class GitHubServiceTests: XCTestCase {
             reviewRequests: [userReq, teamReq, collidingUserReq]
         )
 
-        installHandlers(reviewRequested: [pr], authored: [], reviewed: [])
+        let mock = MockGHCommand()
+        await installHandlers(on: mock, reviewRequested: [pr], authored: [], reviewed: [])
 
-        let service = GitHubService(session: makeSession())
-        let results = try await service.fetchAllPRs(token: "test-token")
+        let service = GitHubService(gh: mock)
+        let results = try await service.fetchAllPRs()
 
         let reviewers = try XCTUnwrap(results.needsReview.first).reviewers
         XCTAssertEqual(reviewers.count, 3)
@@ -392,20 +361,15 @@ final class GitHubServiceTests: XCTestCase {
         let changesPR = prNode(id: "pr-b", number: 31, title: "Changes review-requested", reviewDecision: "CHANGES_REQUESTED")
         let pendingPR = prNode(id: "pr-c", number: 32, title: "Pending review-requested")
 
-        installHandlers(
-            reviewRequested: [approvedPR, changesPR, pendingPR],
-            authored: [],
-            reviewed: []
-        )
+        let mock = MockGHCommand()
+        await installHandlers(on: mock, reviewRequested: [approvedPR, changesPR, pendingPR], authored: [], reviewed: [])
 
-        let service = GitHubService(session: makeSession())
-        let results = try await service.fetchAllPRs(token: "test-token")
+        let service = GitHubService(gh: mock)
+        let results = try await service.fetchAllPRs()
 
-        // Only the pending PR should be in needsReview
         XCTAssertEqual(results.needsReview.count, 1)
         XCTAssertEqual(results.needsReview.first?.id, "pr-c")
 
-        // The changes_requested one should appear in myChangesRequested
         XCTAssertEqual(results.myChangesRequested.count, 1)
         XCTAssertEqual(results.myChangesRequested.first?.id, "pr-b")
     }
