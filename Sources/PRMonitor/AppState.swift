@@ -486,13 +486,14 @@ class AppState: ObservableObject {
                 updatedAt: Date().addingTimeInterval(-3600),
                 isDraft: false,
                 reviewDecision: nil,
+                viewerDidApprove: false,
                 additions: 250,
                 deletions: 40,
                 changedFiles: 8,
                 totalComments: 5,
                 reviewers: [
-                    Reviewer(login: "bob", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/2?v=4")),
-                    Reviewer(login: "carol", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/3?v=4")),
+                    Reviewer(kind: .user, id: "bob", displayName: "bob", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/2?v=4")),
+                    Reviewer(kind: .user, id: "carol", displayName: "carol", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/3?v=4")),
                 ]
             ),
             PullRequest(
@@ -507,6 +508,7 @@ class AppState: ObservableObject {
                 updatedAt: Date().addingTimeInterval(-1800),
                 isDraft: false,
                 reviewDecision: nil,
+                viewerDidApprove: false,
                 additions: 12,
                 deletions: 3,
                 changedFiles: 2,
@@ -527,15 +529,21 @@ class AppState: ObservableObject {
                 updatedAt: Date().addingTimeInterval(-600),
                 isDraft: false,
                 reviewDecision: nil,
+                viewerDidApprove: false,
                 additions: 88,
                 deletions: 15,
                 changedFiles: 4,
                 totalComments: 2,
                 reviewers: [
-                    Reviewer(login: "alice", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/1?v=4")),
-                    Reviewer(login: "dave", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/4?v=4")),
-                    Reviewer(login: "eve", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/5?v=4")),
-                    Reviewer(login: "frank", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/6?v=4")),
+                    Reviewer(kind: .user, id: "alice", displayName: "alice", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/1?v=4")),
+                    Reviewer(
+                        kind: .team,
+                        id: "platform",
+                        displayName: "Platform Team",
+                        avatarURL: URL(string: "https://avatars.githubusercontent.com/t/1?v=4")
+                    ),
+                    Reviewer(kind: .user, id: "eve", displayName: "eve", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/5?v=4")),
+                    Reviewer(kind: .user, id: "frank", displayName: "frank", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/6?v=4")),
                 ]
             )
         ]

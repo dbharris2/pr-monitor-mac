@@ -1,7 +1,14 @@
 import Foundation
 
 struct Reviewer: Codable, Hashable {
-    let login: String
+    enum Kind: String, Codable {
+        case user
+        case team
+    }
+
+    let kind: Kind
+    let id: String
+    let displayName: String
     let avatarURL: URL?
 }
 
@@ -17,6 +24,7 @@ struct PullRequest: Identifiable, Codable, Hashable {
     let updatedAt: Date
     let isDraft: Bool
     let reviewDecision: ReviewDecision?
+    let viewerDidApprove: Bool
     let additions: Int
     let deletions: Int
     let changedFiles: Int
