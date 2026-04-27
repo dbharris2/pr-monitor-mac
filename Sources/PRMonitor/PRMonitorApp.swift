@@ -330,10 +330,6 @@ struct MenuContent: View {
                 openSettings()
             }
 
-            MenuRow(label: "Open Full Version...") {
-                NSWorkspace.shared.open(URL(string: "https://pr-monitor-zeta.vercel.app/")!)
-            }
-
             MenuRow(label: "Quit") {
                 NSApplication.shared.terminate(nil)
             }
