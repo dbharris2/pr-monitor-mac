@@ -335,6 +335,56 @@ final class GitHubServiceTests: XCTestCase {
         XCTAssertEqual(results.myChangesRequested.count, 0)
     }
 
+    // MARK: Team Reviewers
+
+    func testReviewerParsingHandlesTeamsAndUsers() async throws {
+        let userReq: [String: Any] = [
+            "requestedReviewer": [
+                "__typename": "User",
+                "login": "alice",
+                "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4",
+            ],
+        ]
+        let teamReq: [String: Any] = [
+            "requestedReviewer": [
+                "__typename": "Team",
+                "slug": "frontend",
+                "name": "Frontend Team",
+                "avatarUrl": "https://avatars.githubusercontent.com/t/1?v=4",
+            ],
+        ]
+        // Same slug as a user login should not collide — kept as separate entries.
+        let collidingUserReq: [String: Any] = [
+            "requestedReviewer": [
+                "__typename": "User",
+                "login": "frontend",
+                "avatarUrl": "https://avatars.githubusercontent.com/u/2?v=4",
+            ],
+        ]
+
+        let pr = prNode(
+            id: "pr-team", number: 50, title: "Team review",
+            reviewRequests: [userReq, teamReq, collidingUserReq]
+        )
+
+        installHandlers(reviewRequested: [pr], authored: [], reviewed: [])
+
+        let service = GitHubService(session: makeSession())
+        let results = try await service.fetchAllPRs(token: "test-token")
+
+        let reviewers = try XCTUnwrap(results.needsReview.first).reviewers
+        XCTAssertEqual(reviewers.count, 3)
+
+        let alice = try XCTUnwrap(reviewers.first { $0.id == "alice" && $0.kind == .user })
+        XCTAssertEqual(alice.displayName, "alice")
+
+        let team = try XCTUnwrap(reviewers.first { $0.id == "frontend" && $0.kind == .team })
+        XCTAssertEqual(team.displayName, "Frontend Team")
+
+        let userFrontend = try XCTUnwrap(reviewers.first { $0.id == "frontend" && $0.kind == .user })
+        XCTAssertEqual(userFrontend.displayName, "frontend")
+    }
+
     // MARK: Needs Review Filters Out Approved/ChangesRequested
 
     func testNeedsReviewFiltersApprovedAndChangesRequested() async throws {

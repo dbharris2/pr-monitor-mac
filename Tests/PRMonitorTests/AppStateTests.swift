@@ -52,6 +52,7 @@ private func makePR(
         updatedAt: Date(),
         isDraft: false,
         reviewDecision: reviewDecision,
+        viewerDidApprove: false,
         additions: 0,
         deletions: 0,
         changedFiles: 0,

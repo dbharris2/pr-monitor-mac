@@ -46,7 +46,10 @@ actor GitHubService: GitHubServiceProtocol {
         // PRs I've reviewed that aren't approved (includes changes_requested and pending)
         async let reviewed = fetchPRs(query: "is:pr is:open -is:draft reviewed-by:@me -author:@me -review:approved", token: token)
 
-        let (reviewPRs, authoredPRs, reviewedPRs) = try await (needsReview, authored, reviewed)
+        let (reviewResult, authoredResult, reviewedResult) = try await (needsReview, authored, reviewed)
+        let reviewPRs = reviewResult.prs
+        let authoredPRs = authoredResult.prs
+        let reviewedPRs = reviewedResult.prs
 
         var results = PRFetchResults()
 
@@ -73,11 +76,12 @@ actor GitHubService: GitHubServiceProtocol {
         let needsReviewIDs = Set(results.needsReview.map(\.id))
         let requestedWithChanges = reviewPRs.filter { $0.reviewDecision == .changesRequested }
 
-        // Combine and dedupe by ID, excluding PRs that need my review
+        // Combine and dedupe by ID, excluding PRs that need my review or that I approved
         var seen = Set<String>()
         var combined: [PullRequest] = []
         for pr in reviewedPRs + requestedWithChanges
-            where seen.insert(pr.id).inserted && !needsReviewIDs.contains(pr.id) {
+            where seen.insert(pr.id).inserted && !needsReviewIDs.contains(pr.id)
+            && !pr.viewerDidApprove {
             combined.append(pr)
         }
         results.myChangesRequested = combined
@@ -114,9 +118,10 @@ actor GitHubService: GitHubServiceProtocol {
         return tagName.hasPrefix("v") ? String(tagName.dropFirst()) : tagName
     }
 
-    private func fetchPRs(query: String, token: String) async throws -> [PullRequest] {
+    private func fetchPRs(query: String, token: String) async throws -> (viewerLogin: String, prs: [PullRequest]) {
         let graphQLQuery = """
         {
+          viewer { login }
           search(query: "\(query)", type: ISSUE, first: 50) {
             nodes {
               ... on PullRequest {
@@ -142,8 +147,14 @@ actor GitHubService: GitHubServiceProtocol {
                 reviewRequests(first: 5) {
                   nodes {
                     requestedReviewer {
+                      __typename
                       ... on User {
                         login
+                        avatarUrl(size: 64)
+                      }
+                      ... on Team {
+                        slug
+                        name
                         avatarUrl(size: 64)
                       }
                     }
@@ -151,6 +162,7 @@ actor GitHubService: GitHubServiceProtocol {
                 }
                 latestReviews(first: 5) {
                   nodes {
+                    state
                     author {
                       login
                       avatarUrl(size: 64)
@@ -190,12 +202,14 @@ actor GitHubService: GitHubServiceProtocol {
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withInternetDateTime]
 
-        return result.data?.search.nodes.compactMap { node in
-            Self.makePullRequest(from: node, dateFormatter: dateFormatter)
+        let viewerLogin = result.data?.viewer?.login ?? ""
+        let prs = result.data?.search.nodes.compactMap { node in
+            Self.makePullRequest(from: node, viewerLogin: viewerLogin, dateFormatter: dateFormatter)
         } ?? []
+        return (viewerLogin, prs)
     }
 
-    private static func makePullRequest(from node: PRNode, dateFormatter: ISO8601DateFormatter) -> PullRequest? {
+    private static func makePullRequest(from node: PRNode, viewerLogin: String, dateFormatter: ISO8601DateFormatter) -> PullRequest? {
         guard let id = node.id,
               let number = node.number,
               let title = node.title,
@@ -229,6 +243,10 @@ actor GitHubService: GitHubServiceProtocol {
 
         let reviewers = Self.mergeReviewers(from: node)
 
+        let viewerDidApprove = !viewerLogin.isEmpty && (node.latestReviews?.nodes ?? []).contains {
+            $0.author?.login == viewerLogin && $0.state == "APPROVED"
+        }
+
         return PullRequest(
             id: id,
             number: number,
@@ -241,6 +259,7 @@ actor GitHubService: GitHubServiceProtocol {
             updatedAt: updatedAt,
             isDraft: node.isDraft ?? false,
             reviewDecision: reviewDecision,
+            viewerDidApprove: viewerDidApprove,
             additions: node.additions ?? 0,
             deletions: node.deletions ?? 0,
             changedFiles: node.changedFiles ?? 0,
@@ -250,17 +269,36 @@ actor GitHubService: GitHubServiceProtocol {
     }
 
     private static func mergeReviewers(from node: PRNode) -> [Reviewer] {
-        var seenLogins = Set<String>()
+        var seenIDs = Set<String>()
         var reviewers: [Reviewer] = []
         for reqNode in node.reviewRequests?.nodes ?? [] {
-            guard let login = reqNode.requestedReviewer?.login, seenLogins.insert(login).inserted else { continue }
-            reviewers.append(Reviewer(login: login, avatarURL: reqNode.requestedReviewer?.avatarUrl.flatMap(URL.init(string:))))
+            guard let requested = reqNode.requestedReviewer,
+                  let reviewer = Self.makeReviewer(from: requested),
+                  seenIDs.insert("\(reviewer.kind.rawValue):\(reviewer.id)").inserted else { continue }
+            reviewers.append(reviewer)
         }
         for revNode in node.latestReviews?.nodes ?? [] {
-            guard let login = revNode.author?.login, seenLogins.insert(login).inserted else { continue }
-            reviewers.append(Reviewer(login: login, avatarURL: revNode.author?.avatarUrl.flatMap(URL.init(string:))))
+            guard let login = revNode.author?.login,
+                  seenIDs.insert("user:\(login)").inserted else { continue }
+            reviewers.append(Reviewer(
+                kind: .user,
+                id: login,
+                displayName: login,
+                avatarURL: revNode.author?.avatarUrl.flatMap(URL.init(string:))
+            ))
         }
         return reviewers
+    }
+
+    private static func makeReviewer(from requested: RequestedReviewer) -> Reviewer? {
+        let avatarURL = requested.avatarUrl.flatMap(URL.init(string:))
+        if let login = requested.login {
+            return Reviewer(kind: .user, id: login, displayName: login, avatarURL: avatarURL)
+        }
+        if let slug = requested.slug {
+            return Reviewer(kind: .team, id: slug, displayName: requested.name ?? slug, avatarURL: avatarURL)
+        }
+        return nil
     }
 }
 
@@ -272,7 +310,12 @@ private struct GraphQLResponse: Codable {
 }
 
 private struct ResponseData: Codable {
+    let viewer: Viewer?
     let search: SearchResult
+}
+
+private struct Viewer: Codable {
+    let login: String
 }
 
 private struct SearchResult: Codable {
@@ -308,6 +351,8 @@ private struct ReviewRequestNode: Codable {
 
 private struct RequestedReviewer: Codable {
     let login: String?
+    let slug: String?
+    let name: String?
     let avatarUrl: String?
 }
 
@@ -316,6 +361,7 @@ private struct LatestReviewConnection: Codable {
 }
 
 private struct LatestReviewNode: Codable {
+    let state: String?
     let author: Author?
 }
 
