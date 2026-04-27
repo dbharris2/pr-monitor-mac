@@ -22,6 +22,7 @@ private func makePR(
         isDraft: false,
         reviewDecision: nil,
         viewerDidApprove: false,
+        hasAnyApproval: false,
         additions: 0,
         deletions: 0,
         changedFiles: 0,

@@ -48,9 +48,14 @@ actor GitHubService: GitHubServiceProtocol {
 
         var results = PRFetchResults()
 
-        // PRs where I'm requested to review (exclude approved and changes_requested)
+        // PRs where I'm requested to review. Drop ones already approved or with changes requested.
+        // hasAnyApproval is the fallback for repos without branch protection — reviewDecision stays
+        // empty there even after someone approves, so we'd otherwise nag every requested reviewer
+        // on PRs that already have a green check.
         results.needsReview = reviewPRs.filter { pr in
-            pr.reviewDecision != .approved && pr.reviewDecision != .changesRequested
+            pr.reviewDecision != .approved
+                && pr.reviewDecision != .changesRequested
+                && !pr.hasAnyApproval
         }
 
         // PRs I authored
@@ -244,6 +249,7 @@ actor GitHubService: GitHubServiceProtocol {
         let viewerDidApprove = !viewerLogin.isEmpty && (node.latestReviews?.nodes ?? []).contains {
             $0.author?.login == viewerLogin && $0.state == "APPROVED"
         }
+        let hasAnyApproval = (node.latestReviews?.nodes ?? []).contains { $0.state == "APPROVED" }
 
         return PullRequest(
             id: id,
@@ -258,6 +264,7 @@ actor GitHubService: GitHubServiceProtocol {
             isDraft: node.isDraft ?? false,
             reviewDecision: reviewDecision,
             viewerDidApprove: viewerDidApprove,
+            hasAnyApproval: hasAnyApproval,
             additions: node.additions ?? 0,
             deletions: node.deletions ?? 0,
             changedFiles: node.changedFiles ?? 0,
