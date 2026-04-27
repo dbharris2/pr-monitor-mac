@@ -38,8 +38,8 @@ actor GitHubService: GitHubServiceProtocol {
     func fetchAllPRs() async throws -> PRFetchResults {
         async let needsReview = fetchPRs(query: "is:pr is:open -is:draft review-requested:@me")
         async let authored = fetchPRs(query: "is:pr is:open author:@me")
-        // PRs I've reviewed that aren't approved (includes changes_requested and pending)
-        async let reviewed = fetchPRs(query: "is:pr is:open -is:draft reviewed-by:@me -author:@me -review:approved")
+        // Every PR I've reviewed (any state — comment, changes-requested, approved).
+        async let reviewed = fetchPRs(query: "is:pr is:open -is:draft reviewed-by:@me -author:@me")
 
         let (reviewResult, authoredResult, reviewedResult) = try await (needsReview, authored, reviewed)
         let reviewPRs = reviewResult.prs
@@ -71,17 +71,20 @@ actor GitHubService: GitHubServiceProtocol {
             }
         }
 
-        // "Reviewed" section: PRs I've reviewed OR PRs where I'm requested but has changes_requested
-        // Exclude PRs already in "Needs my review" (re-requested after previous review)
+        // "Reviewed" section: any PR with a state-changing review (approval or changes-requested)
+        // OR any PR I've reviewed myself (in any way). PRs where I'm requested but only have
+        // comment-level reviews (state unchanged) stay in "Needs my review" — same model as sam.
         let needsReviewIDs = Set(results.needsReview.map(\.id))
-        let requestedWithChanges = reviewPRs.filter { $0.reviewDecision == .changesRequested }
+        let requestedWithStateChange = reviewPRs.filter { pr in
+            pr.reviewDecision == .approved
+                || pr.reviewDecision == .changesRequested
+                || pr.hasAnyApproval
+        }
 
-        // Combine and dedupe by ID, excluding PRs that need my review or that I approved
         var seen = Set<String>()
         var combined: [PullRequest] = []
-        for pr in reviewedPRs + requestedWithChanges
-            where seen.insert(pr.id).inserted && !needsReviewIDs.contains(pr.id)
-            && !pr.viewerDidApprove {
+        for pr in reviewedPRs + requestedWithStateChange
+            where seen.insert(pr.id).inserted && !needsReviewIDs.contains(pr.id) {
             combined.append(pr)
         }
         results.myChangesRequested = combined
