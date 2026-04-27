@@ -5,15 +5,23 @@ on:
   push:
     branches: [main]
 
-env:
-  SWIFTLINT_VERSION: 0.63.2
-  SWIFTFORMAT_VERSION: 0.59.1
-
 jobs:
   lint:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Read tool versions from Mintfile
+        run: |
+          set -euo pipefail
+          SWIFTLINT_VERSION=$(grep '^realm/SwiftLint@' Mintfile | cut -d@ -f2)
+          SWIFTFORMAT_VERSION=$(grep '^nicklockwood/SwiftFormat@' Mintfile | cut -d@ -f2)
+          if [ -z "$SWIFTLINT_VERSION" ] || [ -z "$SWIFTFORMAT_VERSION" ]; then
+            echo "Failed to parse versions from Mintfile" >&2
+            exit 1
+          fi
+          echo "SWIFTLINT_VERSION=$SWIFTLINT_VERSION" >> "$GITHUB_ENV"
+          echo "SWIFTFORMAT_VERSION=$SWIFTFORMAT_VERSION" >> "$GITHUB_ENV"
 
       - name: Install SwiftLint
         run: |
