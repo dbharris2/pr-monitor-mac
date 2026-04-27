@@ -304,7 +304,7 @@ final class GitHubServiceTests: XCTestCase {
         XCTAssertEqual(results.myChangesRequested.count, 0)
     }
 
-    // MARK: Already-approved PR drops out of needsReview
+    // MARK: Already-approved PR drops out of needsReview, lands in Reviewed
 
     func testNeedsReviewExcludesPRsWithExistingApproval() async throws {
         // Repo without branch protection: reviewDecision is null, but someone has already approved.
@@ -328,11 +328,31 @@ final class GitHubServiceTests: XCTestCase {
         let results = try await service.fetchAllPRs()
 
         XCTAssertEqual(results.needsReview.count, 0, "PRs with any approval should not appear in needsReview")
+        XCTAssertEqual(results.myChangesRequested.count, 1, "Approved-by-someone-else PRs land in Reviewed")
+        XCTAssertEqual(results.myChangesRequested.first?.id, "pr-already-approved")
+    }
+
+    // MARK: PRs I approved show up in Reviewed (not hidden)
+
+    func testReviewedIncludesPRsIApproved() async throws {
+        // I approved a PR. It should show in "Reviewed" so I can track it, not disappear.
+        let pr = prNode(id: "pr-i-approved", number: 50, title: "Thing I approved", reviewDecision: nil)
+
+        let mock = MockGHCommand()
+        // The reviewed-by:@me query returns it (since the -review:approved exclusion is gone).
+        await installHandlers(on: mock, reviewRequested: [], authored: [], reviewed: [pr])
+
+        let service = GitHubService(gh: mock)
+        let results = try await service.fetchAllPRs()
+
+        XCTAssertEqual(results.myChangesRequested.count, 1)
+        XCTAssertEqual(results.myChangesRequested.first?.id, "pr-i-approved")
+        XCTAssertEqual(results.needsReview.count, 0)
     }
 
     func testNeedsReviewIncludesPRsWithOnlyComments() async throws {
         // Same shape as above but the existing review is just a comment, not an approval.
-        // Viewer should still see the PR in needsReview.
+        // Comment reviews don't change PR state, so the viewer still needs to review.
         let commentReview: [String: Any] = [
             "state": "COMMENTED",
             "author": ["login": "jp", "avatarUrl": "https://avatars.githubusercontent.com/u/2?v=4"],
@@ -353,6 +373,7 @@ final class GitHubServiceTests: XCTestCase {
 
         XCTAssertEqual(results.needsReview.count, 1)
         XCTAssertEqual(results.needsReview.first?.id, "pr-only-commented")
+        XCTAssertEqual(results.myChangesRequested.count, 0, "Comment-only PRs don't move to Reviewed")
     }
 
     // MARK: Team Reviewers
@@ -405,9 +426,11 @@ final class GitHubServiceTests: XCTestCase {
         XCTAssertEqual(userFrontend.displayName, "frontend")
     }
 
-    // MARK: Needs Review Filters Out Approved/ChangesRequested
+    // MARK: needsReview vs Reviewed split by PR state
 
     func testNeedsReviewFiltersApprovedAndChangesRequested() async throws {
+        // Three PRs the viewer is requested on, each in a different PR-level state.
+        // Pending → Needs my review. Approved or ChangesRequested → Reviewed.
         let approvedPR = prNode(id: "pr-a", number: 30, title: "Approved review-requested", reviewDecision: "APPROVED")
         let changesPR = prNode(id: "pr-b", number: 31, title: "Changes review-requested", reviewDecision: "CHANGES_REQUESTED")
         let pendingPR = prNode(id: "pr-c", number: 32, title: "Pending review-requested")
@@ -421,7 +444,7 @@ final class GitHubServiceTests: XCTestCase {
         XCTAssertEqual(results.needsReview.count, 1)
         XCTAssertEqual(results.needsReview.first?.id, "pr-c")
 
-        XCTAssertEqual(results.myChangesRequested.count, 1)
-        XCTAssertEqual(results.myChangesRequested.first?.id, "pr-b")
+        let reviewedIDs = Set(results.myChangesRequested.map(\.id))
+        XCTAssertEqual(reviewedIDs, ["pr-a", "pr-b"], "Approved and changes-requested PRs both land in Reviewed")
     }
 }
