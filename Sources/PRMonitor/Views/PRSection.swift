@@ -336,6 +336,7 @@ func relativeTime(from date: Date) -> String {
                     isDraft: false,
                     reviewDecision: nil,
                     viewerDidApprove: false,
+                    hasAnyApproval: false,
                     additions: 1404,
                     deletions: 99,
                     changedFiles: 17,

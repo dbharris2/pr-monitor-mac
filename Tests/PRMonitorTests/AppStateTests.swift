@@ -95,6 +95,7 @@ private func makePR(
         isDraft: false,
         reviewDecision: reviewDecision,
         viewerDidApprove: false,
+        hasAnyApproval: false,
         additions: 0,
         deletions: 0,
         changedFiles: 0,

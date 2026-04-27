@@ -304,6 +304,57 @@ final class GitHubServiceTests: XCTestCase {
         XCTAssertEqual(results.myChangesRequested.count, 0)
     }
 
+    // MARK: Already-approved PR drops out of needsReview
+
+    func testNeedsReviewExcludesPRsWithExistingApproval() async throws {
+        // Repo without branch protection: reviewDecision is null, but someone has already approved.
+        // The viewer is still a requested reviewer but shouldn't be nagged.
+        let approvedReview: [String: Any] = [
+            "state": "APPROVED",
+            "author": ["login": "andy", "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4"],
+        ]
+        let pr = prNode(
+            id: "pr-already-approved",
+            number: 207,
+            title: "feat: thing someone else approved",
+            reviewDecision: nil,
+            latestReviews: [approvedReview]
+        )
+
+        let mock = MockGHCommand()
+        await installHandlers(on: mock, reviewRequested: [pr], authored: [], reviewed: [])
+
+        let service = GitHubService(gh: mock)
+        let results = try await service.fetchAllPRs()
+
+        XCTAssertEqual(results.needsReview.count, 0, "PRs with any approval should not appear in needsReview")
+    }
+
+    func testNeedsReviewIncludesPRsWithOnlyComments() async throws {
+        // Same shape as above but the existing review is just a comment, not an approval.
+        // Viewer should still see the PR in needsReview.
+        let commentReview: [String: Any] = [
+            "state": "COMMENTED",
+            "author": ["login": "jp", "avatarUrl": "https://avatars.githubusercontent.com/u/2?v=4"],
+        ]
+        let pr = prNode(
+            id: "pr-only-commented",
+            number: 208,
+            title: "feat: thing only commented on",
+            reviewDecision: nil,
+            latestReviews: [commentReview]
+        )
+
+        let mock = MockGHCommand()
+        await installHandlers(on: mock, reviewRequested: [pr], authored: [], reviewed: [])
+
+        let service = GitHubService(gh: mock)
+        let results = try await service.fetchAllPRs()
+
+        XCTAssertEqual(results.needsReview.count, 1)
+        XCTAssertEqual(results.needsReview.first?.id, "pr-only-commented")
+    }
+
     // MARK: Team Reviewers
 
     func testReviewerParsingHandlesTeamsAndUsers() async throws {

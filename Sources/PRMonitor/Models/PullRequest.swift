@@ -25,6 +25,7 @@ struct PullRequest: Identifiable, Codable, Hashable {
     let isDraft: Bool
     let reviewDecision: ReviewDecision?
     let viewerDidApprove: Bool
+    let hasAnyApproval: Bool
     let additions: Int
     let deletions: Int
     let changedFiles: Int
