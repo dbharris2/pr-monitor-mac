@@ -18,7 +18,7 @@ packages:
     from: 2.0.0
   MenuBarExtraAccess:
     url: https://github.com/orchetect/MenuBarExtraAccess
-    from: 1.0.0
+    exactVersion: 1.2.2
 
 targets:
   PRMonitor:
