@@ -251,23 +251,9 @@ private struct ReviewerAvatars: View {
             HStack(spacing: 0) {
                 let visible = Array(reviewers.prefix(maxVisible))
                 ZStack(alignment: .leading) {
-                    ForEach(Array(visible.enumerated()), id: \.element.login) { index, reviewer in
-                        AsyncImage(url: reviewer.avatarURL) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Image(systemName: "person.circle.fill")
-                                .resizable()
-                                .foregroundStyle(isHovered ? .white.opacity(0.6) : .secondary)
-                        }
-                        .frame(width: avatarSize, height: avatarSize)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(
-                            isHovered ? Color(nsColor: .selectedContentBackgroundColor) : Color(nsColor: .windowBackgroundColor),
-                            lineWidth: 1.5
-                        ))
-                        .offset(x: CGFloat(index) * (avatarSize - overlap))
+                    ForEach(Array(visible.enumerated()), id: \.element) { index, reviewer in
+                        avatarView(for: reviewer)
+                            .offset(x: CGFloat(index) * (avatarSize - overlap))
                     }
                 }
                 .frame(width: avatarSize + CGFloat(max(visible.count - 1, 0)) * (avatarSize - overlap), alignment: .leading)
@@ -280,6 +266,31 @@ private struct ReviewerAvatars: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func avatarView(for reviewer: Reviewer) -> some View {
+        let shape: AnyShape = reviewer.kind == .team
+            ? AnyShape(RoundedRectangle(cornerRadius: 4))
+            : AnyShape(Circle())
+
+        AsyncImage(url: reviewer.avatarURL) { image in
+            image
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+        } placeholder: {
+            Image(systemName: reviewer.kind == .team ? "person.2.fill" : "person.circle.fill")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .foregroundStyle(isHovered ? .white.opacity(0.6) : .secondary)
+        }
+        .frame(width: avatarSize, height: avatarSize)
+        .clipShape(shape)
+        .overlay(shape.stroke(
+            isHovered ? Color(nsColor: .selectedContentBackgroundColor) : Color(nsColor: .windowBackgroundColor),
+            lineWidth: 1.5
+        ))
+        .help(reviewer.kind == .team ? "\(reviewer.displayName) (team)" : reviewer.displayName)
     }
 }
 
@@ -324,14 +335,25 @@ func relativeTime(from date: Date) -> String {
                     updatedAt: Date().addingTimeInterval(-7200),
                     isDraft: false,
                     reviewDecision: nil,
+                    viewerDidApprove: false,
                     additions: 1404,
                     deletions: 99,
                     changedFiles: 17,
                     totalComments: 3,
                     reviewers: [
-                        Reviewer(login: "bob", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/2?v=4")),
-                        Reviewer(login: "carol", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/3?v=4")),
-                        Reviewer(login: "dave", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/4?v=4")),
+                        Reviewer(kind: .user, id: "bob", displayName: "bob", avatarURL: URL(string: "https://avatars.githubusercontent.com/u/2?v=4")),
+                        Reviewer(
+                            kind: .team,
+                            id: "frontend",
+                            displayName: "Frontend Team",
+                            avatarURL: URL(string: "https://avatars.githubusercontent.com/t/1?v=4")
+                        ),
+                        Reviewer(
+                            kind: .user,
+                            id: "dave",
+                            displayName: "dave",
+                            avatarURL: URL(string: "https://avatars.githubusercontent.com/u/4?v=4")
+                        ),
                     ]
                 )
             ],
