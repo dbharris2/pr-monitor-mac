@@ -6,25 +6,27 @@ protocol GitHubServiceProtocol: Sendable {
 }
 
 actor GitHubService: GitHubServiceProtocol {
-    private let baseURL = URL(string: "https://api.github.com/graphql")!
-    private let session: URLSession
+    private let gh: GHCommandProtocol
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    init(gh: GHCommandProtocol = GHCommand.shared) {
+        self.gh = gh
     }
 
     enum GitHubError: LocalizedError {
-        case noToken
-        case invalidResponse(Int)
+        case ghNotInstalled
+        case ghNotAuthenticated
+        case subprocessFailed(String)
         case apiError(String)
         case decodingError(String)
 
         var errorDescription: String? {
             switch self {
-            case .noToken:
-                "No GitHub token configured. Add your token in Settings."
-            case let .invalidResponse(statusCode):
-                "GitHub API returned status \(statusCode)"
+            case .ghNotInstalled:
+                "GitHub CLI not installed. Install with `brew install gh`, then sign in with `gh auth login`."
+            case .ghNotAuthenticated:
+                "Not signed in to GitHub. Run `gh auth login` in your terminal."
+            case let .subprocessFailed(message):
+                "GitHub CLI error: \(message)"
             case let .apiError(message):
                 "GitHub API error: \(message)"
             case let .decodingError(message):
@@ -34,17 +36,10 @@ actor GitHubService: GitHubServiceProtocol {
     }
 
     func fetchAllPRs() async throws -> PRFetchResults {
-        guard let token = Keychain.getToken() else {
-            throw GitHubError.noToken
-        }
-        return try await fetchAllPRs(token: token)
-    }
-
-    func fetchAllPRs(token: String) async throws -> PRFetchResults {
-        async let needsReview = fetchPRs(query: "is:pr is:open -is:draft review-requested:@me", token: token)
-        async let authored = fetchPRs(query: "is:pr is:open author:@me", token: token)
+        async let needsReview = fetchPRs(query: "is:pr is:open -is:draft review-requested:@me")
+        async let authored = fetchPRs(query: "is:pr is:open author:@me")
         // PRs I've reviewed that aren't approved (includes changes_requested and pending)
-        async let reviewed = fetchPRs(query: "is:pr is:open -is:draft reviewed-by:@me -author:@me -review:approved", token: token)
+        async let reviewed = fetchPRs(query: "is:pr is:open -is:draft reviewed-by:@me -author:@me -review:approved")
 
         let (reviewResult, authoredResult, reviewedResult) = try await (needsReview, authored, reviewed)
         let reviewPRs = reviewResult.prs
@@ -90,35 +85,22 @@ actor GitHubService: GitHubServiceProtocol {
     }
 
     func fetchLatestRelease() async throws -> String? {
-        let url = URL(string: "https://api.github.com/repos/dbharris2/pr-monitor-mac/releases/latest")!
-        var request = URLRequest(url: url)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
+        do {
+            let stdout = try await gh.runExpectingSuccess(
+                arguments: ["api", "/repos/dbharris2/pr-monitor-mac/releases/latest"],
+                stdin: nil,
+                timeout: 15
+            )
+            let json = try JSONSerialization.jsonObject(with: stdout) as? [String: Any]
+            guard let tagName = json?["tag_name"] as? String else { return nil }
+            return tagName.hasPrefix("v") ? String(tagName.dropFirst()) : tagName
+        } catch {
+            // 404 (no releases) and any other failure: best-effort, return nil
             return nil
         }
-
-        // 404 means no releases exist
-        if httpResponse.statusCode == 404 {
-            return nil
-        }
-
-        guard httpResponse.statusCode == 200 else {
-            return nil
-        }
-
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let tagName = json?["tag_name"] as? String else {
-            return nil
-        }
-
-        // Strip leading "v" if present
-        return tagName.hasPrefix("v") ? String(tagName.dropFirst()) : tagName
     }
 
-    private func fetchPRs(query: String, token: String) async throws -> (viewerLogin: String, prs: [PullRequest]) {
+    private func fetchPRs(query: String) async throws -> (viewerLogin: String, prs: [PullRequest]) {
         let graphQLQuery = """
         {
           viewer { login }
@@ -175,25 +157,26 @@ actor GitHubService: GitHubServiceProtocol {
         }
         """
 
-        var request = URLRequest(url: baseURL)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let body = ["query": graphQLQuery]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw GitHubError.invalidResponse(0)
+        // -F (field) supports `@-` to read the value from stdin. -f (raw-field) does NOT — it would send
+        // the literal string "@-" as the query, which GitHub's GraphQL parser rejects.
+        let stdinPayload = Data(graphQLQuery.utf8)
+        let data: Data
+        do {
+            data = try await gh.runExpectingSuccess(
+                arguments: ["api", "graphql", "-F", "query=@-"],
+                stdin: stdinPayload,
+                timeout: 30
+            )
+        } catch let error as GHCommand.GHError {
+            throw Self.mapGHError(error)
         }
 
-        guard httpResponse.statusCode == 200 else {
-            throw GitHubError.invalidResponse(httpResponse.statusCode)
+        let result: GraphQLResponse
+        do {
+            result = try JSONDecoder().decode(GraphQLResponse.self, from: data)
+        } catch {
+            throw GitHubError.decodingError(error.localizedDescription)
         }
-
-        let result = try JSONDecoder().decode(GraphQLResponse.self, from: data)
 
         if let errors = result.errors, !errors.isEmpty {
             throw GitHubError.apiError(errors.first?.message ?? "Unknown error")
@@ -207,6 +190,21 @@ actor GitHubService: GitHubServiceProtocol {
             Self.makePullRequest(from: node, viewerLogin: viewerLogin, dateFormatter: dateFormatter)
         } ?? []
         return (viewerLogin, prs)
+    }
+
+    private static func mapGHError(_ error: GHCommand.GHError) -> GitHubError {
+        switch error {
+        case .ghNotFound:
+            .ghNotInstalled
+        case let .nonZeroExit(_, stderr):
+            stderr.lowercased().contains("authentication") || stderr.lowercased().contains("not logged")
+                ? .ghNotAuthenticated
+                : .subprocessFailed(stderr.isEmpty ? "Unknown error" : stderr)
+        case let .timeout(seconds):
+            .subprocessFailed("Timed out after \(Int(seconds))s")
+        case let .launchFailed(message):
+            .subprocessFailed(message)
+        }
     }
 
     private static func makePullRequest(from node: PRNode, viewerLogin: String, dateFormatter: ISO8601DateFormatter) -> PullRequest? {

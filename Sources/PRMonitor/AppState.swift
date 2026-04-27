@@ -18,6 +18,7 @@ class AppState: ObservableObject {
     @Published var error: String?
     @Published var isMenuPresented = false
     @Published var updateAvailable: String?
+    @Published var ghAuthStatus: GHAuthStatus = .unknown
 
     var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
@@ -45,12 +46,14 @@ class AppState: ObservableObject {
     @AppStorage("menuBarStyle") var menuBarStyle: String = "numbers" // "dots" or "numbers"
 
     private let gitHubService: GitHubServiceProtocol
+    private let gh: GHCommandProtocol
     private var pollTimer: Timer?
     private var snoozeCancellable: AnyCancellable?
     private var notifiedPRIds: Set<String> = []
     private var previousApprovedIds: Set<String> = []
     private var previousChangesRequestedIds: Set<String> = []
     private var isFirstLoad = true
+    private var isCheckingAuth = false
 
     var visibleNeedsReview: [PullRequest] {
         needsReview.filter { !snoozeManager.snoozedIDs.contains($0.id) }
@@ -86,8 +89,13 @@ class AppState: ObservableObject {
         visibleNeedsReview.count
     }
 
-    init(service: GitHubServiceProtocol = GitHubService(), startAutomatically: Bool = true) {
+    init(
+        service: GitHubServiceProtocol = GitHubService(),
+        gh: GHCommandProtocol = GHCommand.shared,
+        startAutomatically: Bool = true
+    ) {
         self.gitHubService = service
+        self.gh = gh
         snoozeCancellable = snoozeManager.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
@@ -96,7 +104,34 @@ class AppState: ObservableObject {
         observeWake()
         setupKeyboardShortcut()
         Task {
+            await refreshAuthStatus()
             await refresh()
+        }
+    }
+
+    func refreshAuthStatus() async {
+        guard !isCheckingAuth else { return }
+        isCheckingAuth = true
+        defer { isCheckingAuth = false }
+
+        do {
+            _ = try await gh.resolveBinary()
+        } catch {
+            ghAuthStatus = .ghMissing
+            return
+        }
+
+        do {
+            let stdout = try await gh.runExpectingSuccess(
+                arguments: ["api", "user", "--jq", ".login"],
+                stdin: nil,
+                timeout: 15
+            )
+            let login = (String(data: stdout, encoding: .utf8) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            ghAuthStatus = login.isEmpty ? .notAuthenticated : .authenticated(login: login)
+        } catch {
+            ghAuthStatus = .notAuthenticated
         }
     }
 
@@ -124,89 +159,15 @@ class AppState: ObservableObject {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
 
-    #if DEBUG
-        func resetNotificationTracking() {
-            notifiedPRIds.removeAll()
-            previousApprovedIds.removeAll()
-            previousChangesRequestedIds.removeAll()
-            isFirstLoad = false
-        }
-
-        func sendTestReviewRequestedNotification() {
-            NSApp.deactivate()
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                let content = UNMutableNotificationContent()
-                content.title = "Needs my review"
-                content.subtitle = "acme/widgets #1234"
-                content.body = "feat: Add dark mode support for dashboard"
-                content.sound = .default
-
-                if let attachment = Self.createReviewRequestedIconAttachment() {
-                    content.attachments = [attachment]
-                }
-
-                let request = UNNotificationRequest(
-                    identifier: UUID().uuidString,
-                    content: content,
-                    trigger: nil
-                )
-
-                UNUserNotificationCenter.current().add(request)
-            }
-        }
-
-        func sendTestApprovedNotification() {
-            NSApp.deactivate()
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                let content = UNMutableNotificationContent()
-                content.title = "Approved"
-                content.subtitle = "acme/widgets #1234"
-                content.body = "feat: Add dark mode support for dashboard"
-                content.sound = .default
-
-                if let attachment = Self.createApprovedIconAttachment() {
-                    content.attachments = [attachment]
-                }
-
-                let request = UNNotificationRequest(
-                    identifier: UUID().uuidString,
-                    content: content,
-                    trigger: nil
-                )
-
-                UNUserNotificationCenter.current().add(request)
-            }
-        }
-
-        func sendTestChangesRequestedNotification() {
-            NSApp.deactivate()
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                let content = UNMutableNotificationContent()
-                content.title = "Returned to me"
-                content.subtitle = "acme/widgets #1234"
-                content.body = "feat: Add dark mode support for dashboard"
-                content.sound = .default
-
-                if let attachment = Self.createChangesRequestedIconAttachment() {
-                    content.attachments = [attachment]
-                }
-
-                let request = UNNotificationRequest(
-                    identifier: UUID().uuidString,
-                    content: content,
-                    trigger: nil
-                )
-
-                UNUserNotificationCenter.current().add(request)
-            }
-        }
-    #endif
-
     func refresh() async {
         guard !isLoading else { return }
+
+        // Lets the user recover from "not signed in" by running `gh auth login` and clicking refresh.
+        if !ghAuthStatus.isHealthy { await refreshAuthStatus() }
+        if let authError = ghAuthStatus.errorDescription {
+            error = authError
+            return
+        }
 
         snoozeManager.cleanExpired()
         isLoading = true
@@ -548,6 +509,64 @@ class AppState: ObservableObject {
             )
         ]
         state.lastUpdated = Date()
+        state.ghAuthStatus = .authenticated(login: "previewer")
         return state
+    }
+}
+
+#if DEBUG
+    extension AppState {
+        func resetNotificationTracking() {
+            notifiedPRIds.removeAll()
+            previousApprovedIds.removeAll()
+            previousChangesRequestedIds.removeAll()
+            isFirstLoad = false
+        }
+
+        func sendTestReviewRequestedNotification() {
+            scheduleTestNotification(title: "Needs my review", attachment: Self.createReviewRequestedIconAttachment())
+        }
+
+        func sendTestApprovedNotification() {
+            scheduleTestNotification(title: "Approved", attachment: Self.createApprovedIconAttachment())
+        }
+
+        func sendTestChangesRequestedNotification() {
+            scheduleTestNotification(title: "Returned to me", attachment: Self.createChangesRequestedIconAttachment())
+        }
+
+        private func scheduleTestNotification(title: String, attachment: UNNotificationAttachment?) {
+            NSApp.deactivate()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                let content = UNMutableNotificationContent()
+                content.title = title
+                content.subtitle = "acme/widgets #1234"
+                content.body = "feat: Add dark mode support for dashboard"
+                content.sound = .default
+                if let attachment { content.attachments = [attachment] }
+                let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+                UNUserNotificationCenter.current().add(request)
+            }
+        }
+    }
+#endif
+
+enum GHAuthStatus: Equatable {
+    case unknown
+    case ghMissing
+    case notAuthenticated
+    case authenticated(login: String)
+
+    var isHealthy: Bool {
+        if case .authenticated = self { return true }
+        return false
+    }
+
+    var errorDescription: String? {
+        switch self {
+        case .ghMissing: GitHubService.GitHubError.ghNotInstalled.errorDescription
+        case .notAuthenticated: GitHubService.GitHubError.ghNotAuthenticated.errorDescription
+        case .unknown, .authenticated: nil
+        }
     }
 }
