@@ -97,15 +97,3 @@ Alternatively, install directly via Homebrew (versions may vary):
 ```bash
 brew install swiftlint swiftformat
 ```
-
-### Pre-commit Hook
-
-To run checks automatically before each commit:
-
-```bash
-# For Sapling
-echo -e "\n[hooks]\npre-commit = ./scripts/pre-commit" >> .sl/config
-
-# For Git
-ln -s ../../scripts/pre-commit .git/hooks/pre-commit
-```
