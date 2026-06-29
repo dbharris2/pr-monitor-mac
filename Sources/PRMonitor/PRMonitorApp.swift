@@ -54,6 +54,9 @@ struct PRMonitorApp: App {
         MenuBarExtra {
             MenuContent()
                 .environmentObject(appState)
+                .introspectMenuBarExtraWindow { window in
+                    Self.configureMenuWindow(window)
+                }
         } label: {
             MenuBarLabel(
                 approvedCount: appState.visibleApproved.count,
@@ -69,6 +72,12 @@ struct PRMonitorApp: App {
             SettingsView()
                 .environmentObject(appState)
         }
+    }
+
+    private static func configureMenuWindow(_ window: NSWindow) {
+        window.backgroundColor = .windowBackgroundColor
+        window.contentView?.wantsLayer = true
+        window.contentView?.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
     }
 }
 
@@ -207,6 +216,9 @@ struct MenuContent: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.openSettings) private var openSettings
 
+    private let menuWidth: CGFloat = 380
+    private let maxPRSectionsHeight: CGFloat = 520
+
     private func dismissMenu() {
         appState.isMenuPresented = false
     }
@@ -215,82 +227,117 @@ struct MenuContent: View {
         appState.snoozeManager.snooze(pr, duration: duration)
     }
 
+    private var prSectionsLayout: MenuPRSections {
+        MenuPRSections(
+            needsReviewCount: appState.visibleNeedsReview.count,
+            changesRequestedCount: appState.visibleChangesRequested.count,
+            approvedCount: appState.visibleApproved.count,
+            waitingForReviewersCount: appState.visibleWaitingForReviewers.count,
+            myChangesRequestedCount: appState.visibleMyChangesRequested.count,
+            draftsCount: appState.visibleDrafts.count,
+            snoozedCount: appState.snoozedPRs.count,
+            expandedSections: appState.expandedSections
+        )
+    }
+
+    @ViewBuilder
+    private var prSections: some View {
+        PRSection(
+            title: "Needs my review",
+            prs: appState.visibleNeedsReview,
+            isExpanded: appState.bindingForSection("needsReview"),
+            sectionIcon: .asset("CodeReviewIcon"),
+            sectionColor: .gitHubOrange,
+            statusColorOverride: .gitHubOrange,
+            onOpenPR: dismissMenu,
+            onSnoozePR: snoozePR
+        )
+
+        PRSection(
+            title: "Returned to me",
+            prs: appState.visibleChangesRequested,
+            isExpanded: appState.bindingForSection("changesRequested"),
+            sectionIcon: .asset("FileDiffIcon"),
+            sectionColor: .red,
+            showTopSeparator: true,
+            onOpenPR: dismissMenu
+        )
+
+        PRSection(
+            title: "Approved",
+            prs: appState.visibleApproved,
+            isExpanded: appState.bindingForSection("approved"),
+            sectionIcon: .sfSymbol("checkmark.circle.fill"),
+            sectionColor: .green,
+            showTopSeparator: true,
+            onOpenPR: dismissMenu
+        )
+
+        PRSection(
+            title: "Waiting for review",
+            prs: appState.visibleWaitingForReviewers,
+            isExpanded: appState.bindingForSection("waitingForReviewers"),
+            sectionIcon: .asset("HourglassIcon"),
+            sectionColor: .blue,
+            showTopSeparator: true,
+            onOpenPR: dismissMenu
+        )
+
+        PRSection(
+            title: "Reviewed",
+            prs: appState.visibleMyChangesRequested,
+            isExpanded: appState.bindingForSection("myChangesRequested"),
+            sectionIcon: .sfSymbol("text.bubble.fill"),
+            sectionColor: .purple,
+            showTopSeparator: true,
+            onOpenPR: dismissMenu,
+            onSnoozePR: snoozePR
+        )
+
+        PRSection(
+            title: "Drafts",
+            prs: appState.visibleDrafts,
+            isExpanded: appState.bindingForSection("drafts"),
+            sectionIcon: .sfSymbol("doc.text.fill"),
+            sectionColor: .secondary,
+            showTopSeparator: true,
+            onOpenPR: dismissMenu
+        )
+
+        if !appState.snoozedPRs.isEmpty {
+            PRSection(
+                title: "Snoozed",
+                prs: appState.snoozedPRs,
+                isExpanded: appState.bindingForSection("snoozed"),
+                sectionIcon: .sfSymbol("moon.fill"),
+                sectionColor: .yellow,
+                showTopSeparator: true,
+                onOpenPR: dismissMenu,
+                onUnsnoozePR: { pr in appState.snoozeManager.unsnooze(prID: pr.id) }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var prSectionsArea: some View {
+        if prSectionsLayout.shouldConstrainPRSections {
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 0) {
+                    prSections
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .frame(maxHeight: maxPRSectionsHeight)
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                prSections
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PRSection(
-                title: "Needs my review",
-                prs: appState.visibleNeedsReview,
-                isExpanded: appState.bindingForSection("needsReview"),
-                sectionIcon: .asset("CodeReviewIcon"),
-                sectionColor: .gitHubOrange,
-                statusColorOverride: .gitHubOrange,
-                onOpenPR: dismissMenu,
-                onSnoozePR: snoozePR
-            )
-
-            PRSection(
-                title: "Returned to me",
-                prs: appState.visibleChangesRequested,
-                isExpanded: appState.bindingForSection("changesRequested"),
-                sectionIcon: .asset("FileDiffIcon"),
-                sectionColor: .red,
-                showTopSeparator: true,
-                onOpenPR: dismissMenu
-            )
-
-            PRSection(
-                title: "Approved",
-                prs: appState.visibleApproved,
-                isExpanded: appState.bindingForSection("approved"),
-                sectionIcon: .sfSymbol("checkmark.circle.fill"),
-                sectionColor: .green,
-                showTopSeparator: true,
-                onOpenPR: dismissMenu
-            )
-
-            PRSection(
-                title: "Waiting for review",
-                prs: appState.visibleWaitingForReviewers,
-                isExpanded: appState.bindingForSection("waitingForReviewers"),
-                sectionIcon: .asset("HourglassIcon"),
-                sectionColor: .blue,
-                showTopSeparator: true,
-                onOpenPR: dismissMenu
-            )
-
-            PRSection(
-                title: "Reviewed",
-                prs: appState.visibleMyChangesRequested,
-                isExpanded: appState.bindingForSection("myChangesRequested"),
-                sectionIcon: .sfSymbol("text.bubble.fill"),
-                sectionColor: .purple,
-                showTopSeparator: true,
-                onOpenPR: dismissMenu,
-                onSnoozePR: snoozePR
-            )
-
-            PRSection(
-                title: "Drafts",
-                prs: appState.visibleDrafts,
-                isExpanded: appState.bindingForSection("drafts"),
-                sectionIcon: .sfSymbol("doc.text.fill"),
-                sectionColor: .secondary,
-                showTopSeparator: true,
-                onOpenPR: dismissMenu
-            )
-
-            if !appState.snoozedPRs.isEmpty {
-                PRSection(
-                    title: "Snoozed",
-                    prs: appState.snoozedPRs,
-                    isExpanded: appState.bindingForSection("snoozed"),
-                    sectionIcon: .sfSymbol("moon.fill"),
-                    sectionColor: .yellow,
-                    showTopSeparator: true,
-                    onOpenPR: dismissMenu,
-                    onUnsnoozePR: { pr in appState.snoozeManager.unsnooze(prID: pr.id) }
-                )
-            }
+            prSectionsArea
 
             Divider()
                 .padding(.vertical, 4)
@@ -365,7 +412,8 @@ struct MenuContent: View {
             .padding(.top, 8)
             .padding(.bottom, 6)
         }
-        .frame(width: 380)
+        .frame(width: menuWidth, alignment: .topLeading)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 
