@@ -54,9 +54,7 @@ struct PRMonitorApp: App {
         MenuBarExtra {
             MenuContent()
                 .environmentObject(appState)
-                .introspectMenuBarExtraWindow { window in
-                    Self.configureMenuWindow(window)
-                }
+                .fitMenuBarExtraWindow(configure: Self.configureMenuWindow)
         } label: {
             MenuBarLabel(
                 approvedCount: appState.visibleApproved.count,
