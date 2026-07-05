@@ -207,7 +207,7 @@ struct PRRow: View {
                 .padding(.trailing, 12)
                 .padding(.vertical, 6)
             }
-            .frame(minHeight: 50)
+            .frame(height: 50)
             .padding(.leading, 12)
             .contentShape(Rectangle())
             .background(

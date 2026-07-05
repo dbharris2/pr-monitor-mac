@@ -325,7 +325,7 @@ struct MenuContent: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .frame(maxHeight: maxPRSectionsHeight)
+            .frame(height: maxPRSectionsHeight)
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 prSections
@@ -411,6 +411,7 @@ struct MenuContent: View {
             .padding(.bottom, 6)
         }
         .frame(width: menuWidth, alignment: .topLeading)
+        .fixedSize(horizontal: false, vertical: true)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 }
