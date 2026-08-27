@@ -240,12 +240,19 @@ struct MenuContent: View {
 
     @ViewBuilder
     private var prSections: some View {
+        if !appState.customReviewFilters.isEmpty {
+            ReviewFiltersSection(
+                isExpanded: appState.bindingForSection("filters")
+            )
+        }
+
         PRSection(
             title: "Needs my review",
             prs: appState.visibleNeedsReview,
             isExpanded: appState.bindingForSection("needsReview"),
             sectionIcon: .asset("CodeReviewIcon"),
             sectionColor: .gitHubOrange,
+            showTopSeparator: !appState.customReviewFilters.isEmpty,
             statusColorOverride: .gitHubOrange,
             onOpenPR: dismissMenu,
             onSnoozePR: snoozePR
@@ -452,6 +459,99 @@ struct MenuRow: View {
         .onHover { hovering in
             isHovered = hovering
         }
+    }
+}
+
+struct ReviewFiltersSection: View {
+    @EnvironmentObject var appState: AppState
+
+    @Binding var isExpanded: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                isExpanded.toggle()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 10)
+
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 16)
+
+                    Text("Filters")
+                        .font(.headline)
+                        .fontWeight(.medium)
+
+                    Text(appState.activeReviewFilter.name)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Spacer()
+
+                    ReviewFilterCountsView(counts: appState.counts(for: appState.activeReviewFilter))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+
+            if isExpanded {
+                ForEach(appState.reviewFiltersForMenu) { filter in
+                    Button {
+                        appState.selectReviewFilter(filter)
+                    } label: {
+                        HStack(spacing: 8) {
+                            if filter.id == appState.activeReviewFilter.id {
+                                Image(systemName: "checkmark")
+                                    .frame(width: 12)
+                            } else {
+                                Color.clear
+                                    .frame(width: 12)
+                            }
+                            Text(filter.name)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                            Spacer()
+                            ReviewFilterCountsView(counts: appState.counts(for: filter))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5)
+                        .contentShape(Rectangle())
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(filter.id == appState.activeReviewFilter.id
+                                    ? Color.accentColor.opacity(0.15)
+                                    : Color.clear)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
+
+struct ReviewFilterCountsView: View {
+    let counts: ReviewFilterCounts
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text("\(counts.needsReview)")
+                .foregroundStyle(Color.gitHubOrange)
+            Text("\(counts.approved)")
+                .foregroundStyle(Color.green)
+            Text("\(counts.changesRequested)")
+                .foregroundStyle(Color.red)
+        }
+        .font(.caption)
     }
 }
 

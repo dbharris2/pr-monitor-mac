@@ -31,6 +31,55 @@ struct PullRequest: Identifiable, Codable, Hashable {
     let changedFiles: Int
     let totalComments: Int
     let reviewers: [Reviewer]
+    let viewerDidReview: Bool
+    let isDirectReviewRequested: Bool
+    let requestedTeamKeys: Set<String>
+
+    init(
+        id: String,
+        number: Int,
+        title: String,
+        url: URL,
+        repository: String,
+        author: String,
+        authorAvatarURL: URL?,
+        createdAt: Date,
+        updatedAt: Date,
+        isDraft: Bool,
+        reviewDecision: ReviewDecision?,
+        viewerDidApprove: Bool,
+        hasAnyApproval: Bool,
+        additions: Int,
+        deletions: Int,
+        changedFiles: Int,
+        totalComments: Int,
+        reviewers: [Reviewer],
+        viewerDidReview: Bool = false,
+        isDirectReviewRequested: Bool = false,
+        requestedTeamKeys: Set<String> = []
+    ) {
+        self.id = id
+        self.number = number
+        self.title = title
+        self.url = url
+        self.repository = repository
+        self.author = author
+        self.authorAvatarURL = authorAvatarURL
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.isDraft = isDraft
+        self.reviewDecision = reviewDecision
+        self.viewerDidApprove = viewerDidApprove
+        self.hasAnyApproval = hasAnyApproval
+        self.additions = additions
+        self.deletions = deletions
+        self.changedFiles = changedFiles
+        self.totalComments = totalComments
+        self.reviewers = reviewers
+        self.viewerDidReview = viewerDidReview
+        self.isDirectReviewRequested = isDirectReviewRequested
+        self.requestedTeamKeys = requestedTeamKeys
+    }
 
     enum ReviewDecision: String, Codable {
         case approved = "APPROVED"

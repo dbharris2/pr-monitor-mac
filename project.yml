@@ -48,7 +48,9 @@ targets:
       - name: SwiftLint
         basedOnDependencyAnalysis: false
         script: |
-          if command -v swiftlint &> /dev/null; then
+          if command -v mint &> /dev/null && [ -f Mintfile ]; then
+            mint run swiftlint --fix && mint run swiftlint
+          elif command -v swiftlint &> /dev/null; then
             swiftlint --fix && swiftlint
           else
             echo "warning: SwiftLint not installed, install via 'brew install swiftlint'"
@@ -56,7 +58,9 @@ targets:
       - name: SwiftFormat
         basedOnDependencyAnalysis: false
         script: |
-          if command -v swiftformat &> /dev/null; then
+          if command -v mint &> /dev/null && [ -f Mintfile ]; then
+            mint run swiftformat . --lint
+          elif command -v swiftformat &> /dev/null; then
             swiftformat . --lint
           else
             echo "warning: SwiftFormat not installed, install via 'brew install swiftformat'"

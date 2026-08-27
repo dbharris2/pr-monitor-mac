@@ -11,29 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Read tool versions from Mintfile
-        run: |
-          set -euo pipefail
-          SWIFTLINT_VERSION=$(grep '^realm/SwiftLint@' Mintfile | cut -d@ -f2)
-          SWIFTFORMAT_VERSION=$(grep '^nicklockwood/SwiftFormat@' Mintfile | cut -d@ -f2)
-          if [ -z "$SWIFTLINT_VERSION" ] || [ -z "$SWIFTFORMAT_VERSION" ]; then
-            echo "Failed to parse versions from Mintfile" >&2
-            exit 1
-          fi
-          echo "SWIFTLINT_VERSION=$SWIFTLINT_VERSION" >> "$GITHUB_ENV"
-          echo "SWIFTFORMAT_VERSION=$SWIFTFORMAT_VERSION" >> "$GITHUB_ENV"
-
-      - name: Install SwiftLint
-        run: |
-          curl -sL "https://github.com/realm/SwiftLint/releases/download/$SWIFTLINT_VERSION/portable_swiftlint.zip" -o swiftlint.zip
-          unzip -q swiftlint.zip -d swiftlint
-          sudo mv swiftlint/swiftlint /usr/local/bin/
-
-      - name: Install SwiftFormat
-        run: |
-          curl -sL "https://github.com/nicklockwood/SwiftFormat/releases/download/$SWIFTFORMAT_VERSION/swiftformat.zip" -o swiftformat.zip
-          unzip -q swiftformat.zip
-          sudo mv swiftformat /usr/local/bin/
+      - name: Install lint tools
+        run: bash .github/scripts/install-lint-tools.sh
 
       - name: Run SwiftLint
         run: swiftlint
@@ -45,6 +24,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install lint tools
+        run: bash .github/scripts/install-lint-tools.sh
 
       - name: Install XcodeGen
         run: brew install xcodegen
