@@ -251,7 +251,10 @@ struct ReviewFilterEditor: View {
                     } else {
                         ForEach(repositories.indices, id: \.self) { index in
                             HStack(spacing: 8) {
-                                TextField("Repository", text: $repositories[index].repository)
+                                TextField("", text: $repositories[index].repository)
+                                    .labelsHidden()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Spacer(minLength: 0)
                                 IncludeExcludeButtons(isIncluded: $repositories[index].isIncluded)
                                 Button {
                                     repositories.remove(at: index)
@@ -265,7 +268,8 @@ struct ReviewFilterEditor: View {
                     }
 
                     HStack {
-                        TextField("owner/repository", text: $newRepository)
+                        TextField("", text: $newRepository, prompt: Text("owner/repository"))
+                            .labelsHidden()
                         Button {
                             addRepository()
                         } label: {
@@ -284,7 +288,10 @@ struct ReviewFilterEditor: View {
                     } else {
                         ForEach(teams.indices, id: \.self) { index in
                             HStack(spacing: 8) {
-                                TextField("Team", text: $teams[index].team)
+                                TextField("", text: $teams[index].team)
+                                    .labelsHidden()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Spacer(minLength: 0)
                                 IncludeExcludeButtons(isIncluded: $teams[index].isIncluded)
                                 Button {
                                     teams.remove(at: index)
@@ -298,7 +305,8 @@ struct ReviewFilterEditor: View {
                     }
 
                     HStack {
-                        TextField("org/team-slug", text: $newTeam)
+                        TextField("", text: $newTeam, prompt: Text("org/team-slug"))
+                            .labelsHidden()
                         Button {
                             addTeam()
                         } label: {
@@ -317,9 +325,11 @@ struct ReviewFilterEditor: View {
                     } else {
                         ForEach(authors.indices, id: \.self) { index in
                             HStack(spacing: 8) {
-                                TextField("Username", text: $authors[index].username)
+                                TextField("", text: $authors[index].username)
+                                    .labelsHidden()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Spacer(minLength: 0)
                                 IncludeExcludeButtons(isIncluded: $authors[index].isIncluded)
-
                                 Button {
                                     authors.remove(at: index)
                                 } label: {
@@ -332,7 +342,8 @@ struct ReviewFilterEditor: View {
                     }
 
                     HStack {
-                        TextField("GitHub username", text: $newAuthor)
+                        TextField("", text: $newAuthor, prompt: Text("GitHub username"))
+                            .labelsHidden()
                         Button {
                             addAuthor()
                         } label: {
