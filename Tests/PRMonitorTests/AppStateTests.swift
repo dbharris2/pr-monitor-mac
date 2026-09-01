@@ -79,7 +79,12 @@ private func makePR(
     id: String,
     number: Int = 1,
     title: String = "Test PR",
-    reviewDecision: PullRequest.ReviewDecision? = nil
+    author: String = "alice",
+    repository: String = "owner/repo",
+    reviewDecision: PullRequest.ReviewDecision? = nil,
+    isDirectReviewRequested: Bool = false,
+    viewerDidReview: Bool = false,
+    requestedTeamKeys: Set<String> = []
 ) -> PullRequest {
     PullRequest(
         id: id,
@@ -87,8 +92,8 @@ private func makePR(
         title: title,
         // swiftformat:disable:next noForceUnwrapInTests
         url: URL(string: "https://github.com/owner/repo/pull/\(number)")!,
-        repository: "owner/repo",
-        author: "alice",
+        repository: repository,
+        author: author,
         authorAvatarURL: nil,
         createdAt: Date(),
         updatedAt: Date(),
@@ -100,7 +105,10 @@ private func makePR(
         deletions: 0,
         changedFiles: 0,
         totalComments: 0,
-        reviewers: []
+        reviewers: [],
+        viewerDidReview: viewerDidReview,
+        isDirectReviewRequested: isDirectReviewRequested,
+        requestedTeamKeys: requestedTeamKeys
     )
 }
 
@@ -111,12 +119,21 @@ final class AppStateTests: XCTestCase {
     private var mockService: MockGitHubService!
     private var mockGH: MockGHCommand!
     private var appState: AppState!
+    private var userDefaults: UserDefaults!
+    private var userDefaultsSuiteName: String!
 
     override func setUp() async throws {
         try await super.setUp()
+        userDefaultsSuiteName = "PRMonitorTests.\(UUID().uuidString)"
+        userDefaults = try XCTUnwrap(UserDefaults(suiteName: userDefaultsSuiteName))
         mockService = MockGitHubService()
         mockGH = MockGHCommand()
-        appState = AppState(service: mockService, gh: mockGH, startAutomatically: false)
+        appState = AppState(
+            service: mockService,
+            gh: mockGH,
+            startAutomatically: false,
+            userDefaults: userDefaults
+        )
         // Default: tests run as if gh CLI is healthy.
         appState.ghAuthStatus = .authenticated(login: "tester")
     }
@@ -125,6 +142,9 @@ final class AppStateTests: XCTestCase {
         appState = nil
         mockService = nil
         mockGH = nil
+        userDefaults.removePersistentDomain(forName: userDefaultsSuiteName)
+        userDefaults = nil
+        userDefaultsSuiteName = nil
         try await super.tearDown()
     }
 
@@ -291,5 +311,313 @@ final class AppStateTests: XCTestCase {
         await appState.refresh()
 
         XCTAssertEqual(appState.needsReviewCount, 3)
+    }
+
+    func testAllAndCustomFilterShowExpectedRequests() {
+        appState.needsReview = [
+            makePR(id: "direct", isDirectReviewRequested: true),
+            makePR(id: "team", requestedTeamKeys: ["acme/platform"]),
+            makePR(id: "non-member", requestedTeamKeys: ["acme/other"]),
+        ]
+
+        XCTAssertEqual(Set(appState.visibleNeedsReview.map(\.id)), ["direct", "team", "non-member"])
+
+        selectPlatformFilter()
+        XCTAssertEqual(Set(appState.visibleNeedsReview.map(\.id)), ["direct", "team"])
+    }
+
+    func testCustomFilterIncludesSelectedTeamsAndDirectRequests() {
+        appState.needsReview = [
+            makePR(id: "team-only", requestedTeamKeys: ["acme/platform"]),
+            makePR(id: "direct", isDirectReviewRequested: true),
+            makePR(
+                id: "direct-and-team",
+                isDirectReviewRequested: true,
+                requestedTeamKeys: ["acme/platform"]
+            ),
+        ]
+
+        XCTAssertEqual(
+            Set(appState.visibleNeedsReview.map(\.id)),
+            ["team-only", "direct", "direct-and-team"]
+        )
+
+        selectPlatformFilter()
+        XCTAssertEqual(
+            Set(appState.visibleNeedsReview.map(\.id)),
+            ["team-only", "direct", "direct-and-team"]
+        )
+    }
+
+    func testCustomFilterMatchesMemberTeamAmongMultipleRequests() {
+        appState.needsReview = [
+            makePR(id: "multiple-teams", requestedTeamKeys: ["acme/platform", "acme/other"]),
+        ]
+
+        selectPlatformFilter()
+        XCTAssertEqual(appState.visibleNeedsReview.map(\.id), ["multiple-teams"])
+    }
+
+    func testTeamRulesMatchExplicitTeamKeys() {
+        appState.needsReview = [
+            makePR(id: "platform", requestedTeamKeys: ["acme/platform"]),
+            makePR(id: "other", requestedTeamKeys: ["acme/other"]),
+        ]
+
+        let filter = ReviewFilter(
+            id: "all-teams",
+            name: "All teams",
+            includesDirectRequests: false,
+            teams: [ReviewFilterTeam(team: "acme/platform", isIncluded: true)]
+        )
+        appState.saveReviewFilter(filter)
+        appState.selectReviewFilter(filter)
+
+        XCTAssertEqual(appState.visibleNeedsReview.map(\.id), ["platform"])
+    }
+
+    func testTeamRulesSupportIncludeAndExclude() {
+        appState.needsReview = [
+            makePR(id: "included", requestedTeamKeys: ["acme/platform"]),
+            makePR(
+                id: "excluded",
+                isDirectReviewRequested: true,
+                requestedTeamKeys: ["acme/releases"]
+            ),
+            makePR(id: "not-selected", requestedTeamKeys: ["acme/other"]),
+        ]
+
+        let filter = ReviewFilter(
+            id: "team-rules",
+            name: "Team rules",
+            includesDirectRequests: true,
+            teams: [
+                ReviewFilterTeam(team: "acme/platform", isIncluded: true),
+                ReviewFilterTeam(team: "acme/releases", isIncluded: false),
+            ]
+        )
+        appState.saveReviewFilter(filter)
+        appState.selectReviewFilter(filter)
+
+        XCTAssertEqual(appState.visibleNeedsReview.map(\.id), ["included"])
+    }
+
+    func testCustomFilterMatchesSelectedUsernames() {
+        appState.needsReview = [
+            makePR(id: "selected", author: "perchwell-release-please[bot]"),
+            makePR(id: "not-selected", author: "someone-else"),
+        ]
+
+        let filter = ReviewFilter(
+            id: "bot-filter",
+            name: "Release bot",
+            includesDirectRequests: false,
+            teams: [],
+            authors: [ReviewFilterAuthor(username: "perchwell-release-please[bot]", isIncluded: true)]
+        )
+        appState.saveReviewFilter(filter)
+        appState.selectReviewFilter(filter)
+
+        XCTAssertEqual(appState.visibleNeedsReview.map(\.id), ["selected"])
+    }
+
+    func testCustomFilterMatchesIncludedAndExcludedRepositories() {
+        appState.needsReview = [
+            makePR(id: "included", repository: "RivingtonHoldings/athens"),
+            makePR(id: "excluded", repository: "RivingtonHoldings/releases"),
+            makePR(id: "not-selected", repository: "RivingtonHoldings/widgets"),
+        ]
+
+        let filter = ReviewFilter(
+            id: "repository-filter",
+            name: "Repositories",
+            includesDirectRequests: false,
+            teams: [],
+            repositories: [
+                ReviewFilterRepository(repository: "rivingtonholdings/athens", isIncluded: true),
+                ReviewFilterRepository(repository: "rivingtonholdings/releases", isIncluded: false),
+            ]
+        )
+        appState.saveReviewFilter(filter)
+        appState.selectReviewFilter(filter)
+
+        XCTAssertEqual(appState.visibleNeedsReview.map(\.id), ["included"])
+    }
+
+    func testExcludedAuthorOverridesOtherFilterMatches() {
+        appState.needsReview = [
+            makePR(
+                id: "excluded",
+                author: "release-bot",
+                isDirectReviewRequested: true,
+                requestedTeamKeys: ["acme/platform"]
+            ),
+            makePR(id: "included", author: "another-author", requestedTeamKeys: ["acme/platform"]),
+        ]
+
+        let filter = ReviewFilter(
+            id: "author-filter",
+            name: "Author rules",
+            includesDirectRequests: true,
+            teams: [ReviewFilterTeam(team: "acme/platform", isIncluded: true)],
+            authors: [ReviewFilterAuthor(username: "release-bot", isIncluded: false)]
+        )
+        appState.saveReviewFilter(filter)
+        appState.selectReviewFilter(filter)
+
+        XCTAssertEqual(appState.visibleNeedsReview.map(\.id), ["included"])
+    }
+
+    func testExcludeOnlyAuthorFilterKeepsOtherAuthors() {
+        appState.needsReview = [
+            makePR(id: "release", author: "perchwell-release-please[bot]"),
+            makePR(id: "feature", author: "alice"),
+        ]
+
+        let filter = ReviewFilter(
+            id: "without-releases",
+            name: "Without releases",
+            includesDirectRequests: true,
+            teams: [],
+            authors: [ReviewFilterAuthor(username: "perchwell-release-please[bot]", isIncluded: false)]
+        )
+        appState.saveReviewFilter(filter)
+        appState.selectReviewFilter(filter)
+
+        XCTAssertEqual(appState.visibleNeedsReview.map(\.id), ["feature"])
+    }
+
+    func testFilterAppliesToAllSectionsAndCounts() {
+        appState.needsReview = [
+            makePR(id: "needs-alice", author: "alice"),
+            makePR(id: "needs-bob", author: "bob"),
+        ]
+        appState.waitingForReviewers = [
+            makePR(id: "waiting-alice", author: "alice"),
+            makePR(id: "waiting-bob", author: "bob"),
+        ]
+        appState.approved = [
+            makePR(id: "approved-alice", author: "alice"),
+            makePR(id: "approved-bob", author: "bob"),
+        ]
+        appState.changesRequested = [
+            makePR(id: "changes-alice", author: "alice"),
+            makePR(id: "changes-bob", author: "bob"),
+        ]
+        appState.myChangesRequested = [
+            makePR(id: "reviewed-alice", author: "alice"),
+            makePR(id: "reviewed-bob", author: "bob"),
+        ]
+        appState.drafts = [
+            makePR(id: "draft-alice", author: "alice"),
+            makePR(id: "draft-bob", author: "bob"),
+        ]
+
+        let filter = ReviewFilter(
+            id: "alice",
+            name: "Alice",
+            includesDirectRequests: false,
+            teams: [],
+            authors: [ReviewFilterAuthor(username: "alice", isIncluded: true)]
+        )
+        appState.saveReviewFilter(filter)
+        appState.selectReviewFilter(filter)
+
+        XCTAssertEqual(appState.visibleNeedsReview.map(\.id), ["needs-alice"])
+        XCTAssertEqual(Set(appState.visibleWaitingForReviewers.map(\.id)), ["waiting-alice", "waiting-bob"])
+        XCTAssertEqual(Set(appState.visibleApproved.map(\.id)), ["approved-alice", "approved-bob"])
+        XCTAssertEqual(Set(appState.visibleChangesRequested.map(\.id)), ["changes-alice", "changes-bob"])
+        XCTAssertEqual(appState.visibleMyChangesRequested.map(\.id), ["reviewed-alice"])
+        XCTAssertEqual(Set(appState.visibleDrafts.map(\.id)), ["draft-alice", "draft-bob"])
+
+        let counts = appState.counts(for: filter)
+        XCTAssertEqual(counts.needsReview, 1)
+        XCTAssertEqual(counts.approved, 2)
+        XCTAssertEqual(counts.changesRequested, 2)
+    }
+
+    func testTeamRuleDoesNotMatchOtherTeams() {
+        appState.needsReview = [
+            makePR(id: "member", requestedTeamKeys: ["acme/platform"]),
+            makePR(id: "non-member", requestedTeamKeys: ["acme/other"]),
+        ]
+
+        XCTAssertEqual(Set(appState.visibleNeedsReview.map(\.id)), ["member", "non-member"])
+
+        selectPlatformFilter()
+
+        XCTAssertEqual(appState.visibleNeedsReview.map(\.id), ["member"])
+    }
+
+    func testFilteredAppliesToReviewedSection() {
+        appState.myChangesRequested = [
+            makePR(id: "reviewed-by-me", viewerDidReview: true),
+            makePR(id: "team-review", requestedTeamKeys: ["acme/platform"]),
+            makePR(id: "non-member-team", requestedTeamKeys: ["acme/other"]),
+        ]
+
+        XCTAssertEqual(Set(appState.visibleMyChangesRequested.map(\.id)), [
+            "reviewed-by-me",
+            "team-review",
+            "non-member-team",
+        ])
+
+        selectPlatformFilter()
+
+        XCTAssertEqual(
+            Set(appState.visibleMyChangesRequested.map(\.id)),
+            ["team-review"]
+        )
+    }
+
+    func testReviewFiltersPersistAcrossAppStateInstances() {
+        let filter = ReviewFilter(
+            id: "persisted-filter",
+            name: "Persisted",
+            includesDirectRequests: true,
+            teams: [ReviewFilterTeam(team: "acme/platform", isIncluded: true)],
+            repositories: [ReviewFilterRepository(repository: "acme/widgets", isIncluded: true)]
+        )
+        appState.saveReviewFilter(filter)
+        appState.selectReviewFilter(filter)
+
+        let reloadedState = AppState(
+            service: mockService,
+            gh: mockGH,
+            startAutomatically: false,
+            userDefaults: userDefaults
+        )
+
+        XCTAssertEqual(reloadedState.customReviewFilters, [filter])
+        XCTAssertEqual(reloadedState.activeReviewFilter, filter)
+    }
+
+    func testReviewFilterPersistsAuthorModes() throws {
+        let filter = ReviewFilter(
+            id: "author-rules",
+            name: "Author rules",
+            includesDirectRequests: false,
+            teams: [],
+            authors: [
+                ReviewFilterAuthor(username: "release-bot", isIncluded: false),
+                ReviewFilterAuthor(username: "alice", isIncluded: true),
+            ],
+            repositories: [ReviewFilterRepository(repository: "acme/releases", isIncluded: false)]
+        )
+
+        let encoded = try JSONEncoder().encode(filter)
+        let decoded = try JSONDecoder().decode(ReviewFilter.self, from: encoded)
+        XCTAssertEqual(decoded, filter)
+    }
+
+    private func selectPlatformFilter() {
+        let filter = ReviewFilter(
+            id: "test-filter",
+            name: "Platform",
+            includesDirectRequests: true,
+            teams: [ReviewFilterTeam(team: "acme/platform", isIncluded: true)]
+        )
+        appState.saveReviewFilter(filter)
+        appState.selectReviewFilter(filter)
     }
 }

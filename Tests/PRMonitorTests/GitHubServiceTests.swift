@@ -45,6 +45,7 @@ private final actor MockGHCommand: GHCommandProtocol {
 private func graphQLJSON(nodes: [[String: Any]]) -> Data {
     let body: [String: Any] = [
         "data": [
+            "viewer": ["login": "tester"],
             "search": [
                 "nodes": nodes,
             ],
@@ -424,6 +425,38 @@ final class GitHubServiceTests: XCTestCase {
 
         let userFrontend = try XCTUnwrap(reviewers.first { $0.id == "frontend" && $0.kind == .user })
         XCTAssertEqual(userFrontend.displayName, "frontend")
+    }
+
+    func testReviewRequestSourcesAreParsed() async throws {
+        let directRequest: [String: Any] = [
+            "requestedReviewer": [
+                "__typename": "User",
+                "login": "tester",
+            ],
+        ]
+        let teamRequest: [String: Any] = [
+            "requestedReviewer": [
+                "__typename": "Team",
+                "slug": "platform",
+                "name": "Platform",
+                "organization": ["login": "acme"],
+            ],
+        ]
+        let pr = prNode(
+            id: "pr-sources",
+            number: 51,
+            title: "Request sources",
+            reviewRequests: [directRequest, teamRequest]
+        )
+
+        let mock = MockGHCommand()
+        await installHandlers(on: mock, reviewRequested: [pr], authored: [], reviewed: [])
+
+        let results = try await GitHubService(gh: mock).fetchAllPRs()
+        let parsed = try XCTUnwrap(results.needsReview.first)
+
+        XCTAssertTrue(parsed.isDirectReviewRequested)
+        XCTAssertEqual(parsed.requestedTeamKeys, ["acme/platform"])
     }
 
     // MARK: needsReview vs Reviewed split by PR state

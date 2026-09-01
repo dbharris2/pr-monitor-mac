@@ -93,6 +93,8 @@ brew install mint
 mint bootstrap
 ```
 
+The `just format` and `just lint` commands use these pinned versions automatically when Mint is available. CI reads the same `Mintfile`, so local and CI formatting stay in sync.
+
 Alternatively, install directly via Homebrew (versions may vary):
 ```bash
 brew install swiftlint swiftformat

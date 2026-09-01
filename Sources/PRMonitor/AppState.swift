@@ -19,12 +19,14 @@ class AppState: ObservableObject {
     @Published var isMenuPresented = false
     @Published var updateAvailable: String?
     @Published var ghAuthStatus: GHAuthStatus = .unknown
+    @Published private(set) var customReviewFilters: [ReviewFilter] = []
 
     var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
     }
 
     @Published var expandedSections: [String: Bool] = [
+        "filters": true,
         "needsReview": true,
         "waitingForReviewers": true,
         "approved": false,
@@ -44,9 +46,9 @@ class AppState: ObservableObject {
     @AppStorage("pollInterval") var pollInterval: TimeInterval = 300 // 5 minutes
     @AppStorage("notificationsEnabled") var notificationsEnabled: Bool = false
     @AppStorage("menuBarStyle") var menuBarStyle: String = "numbers" // "dots" or "numbers"
-
     private let gitHubService: GitHubServiceProtocol
     private let gh: GHCommandProtocol
+    private let userDefaults: UserDefaults
     private var pollTimer: Timer?
     private var snoozeCancellable: AnyCancellable?
     private var notifiedPRIds: Set<String> = []
@@ -55,28 +57,41 @@ class AppState: ObservableObject {
     private var isFirstLoad = true
     private var isCheckingAuth = false
 
+    private var activeReviewFilterID: String {
+        get { userDefaults.string(forKey: "activeReviewFilterID") ?? ReviewFilter.allID }
+        set { userDefaults.set(newValue, forKey: "activeReviewFilterID") }
+    }
+
+    var reviewFiltersForMenu: [ReviewFilter] {
+        [ReviewFilter.all] + customReviewFilters
+    }
+
+    var activeReviewFilter: ReviewFilter {
+        reviewFiltersForMenu.first { $0.id == activeReviewFilterID } ?? .all
+    }
+
     var visibleNeedsReview: [PullRequest] {
-        needsReview.filter { !snoozeManager.snoozedIDs.contains($0.id) }
+        filteredPRs(needsReview, filter: activeReviewFilter)
     }
 
     var visibleWaitingForReviewers: [PullRequest] {
-        waitingForReviewers.filter { !snoozeManager.snoozedIDs.contains($0.id) }
+        unsnoozedPRs(waitingForReviewers)
     }
 
     var visibleApproved: [PullRequest] {
-        approved.filter { !snoozeManager.snoozedIDs.contains($0.id) }
+        unsnoozedPRs(approved)
     }
 
     var visibleChangesRequested: [PullRequest] {
-        changesRequested.filter { !snoozeManager.snoozedIDs.contains($0.id) }
+        unsnoozedPRs(changesRequested)
     }
 
     var visibleMyChangesRequested: [PullRequest] {
-        myChangesRequested.filter { !snoozeManager.snoozedIDs.contains($0.id) }
+        filteredPRs(myChangesRequested, filter: activeReviewFilter)
     }
 
     var visibleDrafts: [PullRequest] {
-        drafts.filter { !snoozeManager.snoozedIDs.contains($0.id) }
+        unsnoozedPRs(drafts)
     }
 
     var snoozedPRs: [PullRequest] {
@@ -89,13 +104,51 @@ class AppState: ObservableObject {
         visibleNeedsReview.count
     }
 
+    func selectReviewFilter(_ filter: ReviewFilter) {
+        objectWillChange.send()
+        activeReviewFilterID = filter.id
+        // Treat the currently visible PRs as already observed when changing filters.
+        // This prevents selecting a filter from notifying about old PRs that were
+        // already present under another filter.
+        notifiedPRIds = Set(filteredPRs(needsReview, filter: filter).map(\.id))
+    }
+
+    func saveReviewFilter(_ filter: ReviewFilter) {
+        if let index = customReviewFilters.firstIndex(where: { $0.id == filter.id }) {
+            customReviewFilters[index] = filter
+        } else {
+            customReviewFilters.append(filter)
+        }
+        customReviewFilters.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        persistReviewFilters()
+    }
+
+    func deleteReviewFilter(_ filter: ReviewFilter) {
+        customReviewFilters.removeAll { $0.id == filter.id }
+        if activeReviewFilterID == filter.id {
+            activeReviewFilterID = ReviewFilter.allID
+        }
+        persistReviewFilters()
+    }
+
+    func counts(for filter: ReviewFilter) -> ReviewFilterCounts {
+        ReviewFilterCounts(
+            needsReview: filteredPRs(needsReview, filter: filter).count,
+            approved: unsnoozedPRs(approved).count,
+            changesRequested: unsnoozedPRs(changesRequested).count
+        )
+    }
+
     init(
         service: GitHubServiceProtocol = GitHubService(),
         gh: GHCommandProtocol = GHCommand.shared,
-        startAutomatically: Bool = true
+        startAutomatically: Bool = true,
+        userDefaults: UserDefaults = .standard
     ) {
         self.gitHubService = service
         self.gh = gh
+        self.userDefaults = userDefaults
+        customReviewFilters = Self.loadReviewFilters(from: userDefaults)
         snoozeCancellable = snoozeManager.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
@@ -169,9 +222,9 @@ class AppState: ObservableObject {
             return
         }
 
-        snoozeManager.cleanExpired()
         isLoading = true
         error = nil
+        snoozeManager.cleanExpired()
 
         do {
             let results = try await gitHubService.fetchAllPRs()
@@ -179,7 +232,11 @@ class AppState: ObservableObject {
             // Check for new PRs needing review (skip on first load)
             if !isFirstLoad, notificationsEnabled {
                 let snoozedIDs = snoozeManager.snoozedIDs
-                let newPRs = results.needsReview.filter { !notifiedPRIds.contains($0.id) && !snoozedIDs.contains($0.id) }
+                let newPRs = results.needsReview.filter {
+                    !notifiedPRIds.contains($0.id)
+                        && !snoozedIDs.contains($0.id)
+                        && matchesReviewFilter($0, filter: activeReviewFilter)
+                }
                 if newPRs.count == 1 {
                     sendReviewRequestedNotification(for: newPRs[0])
                 } else if newPRs.count > 1 {
@@ -187,21 +244,31 @@ class AppState: ObservableObject {
                 }
 
                 // Check for newly approved PRs
-                let newlyApproved = results.approved.filter { !previousApprovedIds.contains($0.id) && !snoozedIDs.contains($0.id) }
+                let newlyApproved = results.approved.filter {
+                    !previousApprovedIds.contains($0.id)
+                        && !snoozedIDs.contains($0.id)
+                }
                 for pr in newlyApproved {
                     sendApprovedNotification(for: pr)
                 }
 
                 // Check for PRs with newly requested changes
                 let newlyChangesRequested = results.changesRequested
-                    .filter { !previousChangesRequestedIds.contains($0.id) && !snoozedIDs.contains($0.id) }
+                    .filter {
+                        !previousChangesRequestedIds.contains($0.id)
+                            && !snoozedIDs.contains($0.id)
+                    }
                 for pr in newlyChangesRequested {
                     sendChangesRequestedNotification(for: pr)
                 }
             }
 
-            // Track all current PR IDs
-            notifiedPRIds = Set(results.needsReview.map(\.id))
+            // Track only current PRs matching the active filter.
+            notifiedPRIds = Set(
+                results.needsReview
+                    .filter { matchesReviewFilter($0, filter: activeReviewFilter) }
+                    .map(\.id)
+            )
             previousApprovedIds = Set(results.approved.map(\.id))
             previousChangesRequestedIds = Set(results.changesRequested.map(\.id))
             isFirstLoad = false
@@ -224,6 +291,69 @@ class AppState: ObservableObject {
         }
 
         isLoading = false
+    }
+
+    private func filteredPRs(_ prs: [PullRequest], filter: ReviewFilter) -> [PullRequest] {
+        unsnoozedPRs(prs).filter { matchesReviewFilter($0, filter: filter) }
+    }
+
+    private func unsnoozedPRs(_ prs: [PullRequest]) -> [PullRequest] {
+        let snoozedIDs = snoozeManager.snoozedIDs
+        return prs.filter { !snoozedIDs.contains($0.id) }
+    }
+
+    private func matchesReviewFilter(_ pr: PullRequest, filter: ReviewFilter) -> Bool {
+        guard !filter.isAll else { return true }
+
+        let authorRule = filter.authors.first {
+            $0.username.caseInsensitiveCompare(pr.author) == .orderedSame
+        }
+        let repositoryRule = filter.repositories.first {
+            $0.repository.caseInsensitiveCompare(pr.repository) == .orderedSame
+        }
+
+        let matchingTeamRules = filter.teams.filter { rule in
+            pr.requestedTeamKeys.contains {
+                $0.caseInsensitiveCompare(rule.team) == .orderedSame
+            }
+        }
+
+        if authorRule?.isIncluded == false
+            || repositoryRule?.isIncluded == false
+            || matchingTeamRules.contains(where: { !$0.isIncluded }) {
+            return false
+        }
+
+        let matchesIncludedAuthor = authorRule?.isIncluded == true
+        let matchesIncludedRepository = repositoryRule?.isIncluded == true
+        let matchesDirectRequest = filter.includesDirectRequests
+            && pr.isDirectReviewRequested
+
+        if matchesIncludedAuthor || matchesIncludedRepository || matchesDirectRequest {
+            return true
+        }
+
+        if matchingTeamRules.contains(where: \.isIncluded) {
+            return true
+        }
+
+        // Exclude-only rules are useful blacklists: include everything except
+        // the explicitly excluded values. With no positive criteria at all,
+        // the filter is unrestricted apart from its exclusions.
+        let hasPositiveCriteria = filter.teams.contains { $0.isIncluded }
+            || filter.authors.contains { $0.isIncluded }
+            || filter.repositories.contains { $0.isIncluded }
+        return !hasPositiveCriteria
+    }
+
+    private static func loadReviewFilters(from userDefaults: UserDefaults) -> [ReviewFilter] {
+        guard let data = userDefaults.data(forKey: "reviewFilters") else { return [] }
+        return (try? JSONDecoder().decode([ReviewFilter].self, from: data)) ?? []
+    }
+
+    private func persistReviewFilters() {
+        guard let data = try? JSONEncoder().encode(customReviewFilters) else { return }
+        userDefaults.set(data, forKey: "reviewFilters")
     }
 
     private func sendReviewRequestedNotification(for pr: PullRequest) {

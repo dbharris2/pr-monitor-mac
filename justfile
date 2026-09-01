@@ -24,16 +24,16 @@ open:
 
 # Run SwiftFormat to auto-fix formatting
 format:
-    swiftformat .
+    if command -v mint >/dev/null 2>&1 && test -f Mintfile; then mint run swiftformat .; else swiftformat .; fi
 
 # Run SwiftLint with auto-fix
 lint-fix:
-    swiftlint --fix
+    if command -v mint >/dev/null 2>&1 && test -f Mintfile; then mint run swiftlint --fix; else swiftlint --fix; fi
 
 # Check formatting and linting without modifying files
 lint:
-    swiftformat . --lint
-    swiftlint
+    if command -v mint >/dev/null 2>&1 && test -f Mintfile; then mint run swiftformat . --lint; else swiftformat . --lint; fi
+    if command -v mint >/dev/null 2>&1 && test -f Mintfile; then mint run swiftlint; else swiftlint; fi
 
 # Run unit tests
 test: generate

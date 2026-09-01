@@ -39,7 +39,7 @@ actor GitHubService: GitHubServiceProtocol {
         async let needsReview = fetchPRs(query: "is:pr is:open -is:draft review-requested:@me")
         async let authored = fetchPRs(query: "is:pr is:open author:@me")
         // Every PR I've reviewed (any state — comment, changes-requested, approved).
-        async let reviewed = fetchPRs(query: "is:pr is:open -is:draft reviewed-by:@me -author:@me")
+        async let reviewed = fetchPRs(query: "is:pr is:open -is:draft reviewed-by:@me -author:@me", viewerReviewed: true)
 
         let (reviewResult, authoredResult, reviewedResult) = try await (needsReview, authored, reviewed)
         let reviewPRs = reviewResult.prs
@@ -108,7 +108,7 @@ actor GitHubService: GitHubServiceProtocol {
         }
     }
 
-    private func fetchPRs(query: String) async throws -> (viewerLogin: String, prs: [PullRequest]) {
+    private func fetchPRs(query: String, viewerReviewed: Bool = false) async throws -> (viewerLogin: String, prs: [PullRequest]) {
         let graphQLQuery = """
         {
           viewer { login }
@@ -134,10 +134,14 @@ actor GitHubService: GitHubServiceProtocol {
                 deletions
                 changedFiles
                 totalCommentsCount
-                reviewRequests(first: 5) {
+                reviewRequests(first: 100) {
                   nodes {
                     requestedReviewer {
                       __typename
+                      ... on Team {
+                        id
+                        organization { login }
+                      }
                       ... on User {
                         login
                         avatarUrl(size: 64)
@@ -195,7 +199,12 @@ actor GitHubService: GitHubServiceProtocol {
 
         let viewerLogin = result.data?.viewer?.login ?? ""
         let prs = result.data?.search.nodes.compactMap { node in
-            Self.makePullRequest(from: node, viewerLogin: viewerLogin, dateFormatter: dateFormatter)
+            Self.makePullRequest(
+                from: node,
+                viewerLogin: viewerLogin,
+                viewerReviewed: viewerReviewed,
+                dateFormatter: dateFormatter
+            )
         } ?? []
         return (viewerLogin, prs)
     }
@@ -215,7 +224,12 @@ actor GitHubService: GitHubServiceProtocol {
         }
     }
 
-    private static func makePullRequest(from node: PRNode, viewerLogin: String, dateFormatter: ISO8601DateFormatter) -> PullRequest? {
+    private static func makePullRequest(
+        from node: PRNode,
+        viewerLogin: String,
+        viewerReviewed: Bool = false,
+        dateFormatter: ISO8601DateFormatter
+    ) -> PullRequest? {
         guard let id = node.id,
               let number = node.number,
               let title = node.title,
@@ -248,6 +262,9 @@ actor GitHubService: GitHubServiceProtocol {
         }
 
         let reviewers = Self.mergeReviewers(from: node)
+        let requestedReviewers = node.reviewRequests?.nodes.compactMap(\.requestedReviewer) ?? []
+        let isDirectReviewRequested = requestedReviewers.contains { $0.login == viewerLogin }
+        let requestedTeamKeys = Set(requestedReviewers.compactMap(Self.teamKey(from:)))
 
         let viewerDidApprove = !viewerLogin.isEmpty && (node.latestReviews?.nodes ?? []).contains {
             $0.author?.login == viewerLogin && $0.state == "APPROVED"
@@ -272,7 +289,10 @@ actor GitHubService: GitHubServiceProtocol {
             deletions: node.deletions ?? 0,
             changedFiles: node.changedFiles ?? 0,
             totalComments: node.totalCommentsCount ?? 0,
-            reviewers: reviewers
+            reviewers: reviewers,
+            viewerDidReview: viewerReviewed,
+            isDirectReviewRequested: isDirectReviewRequested,
+            requestedTeamKeys: requestedTeamKeys
         )
     }
 
@@ -304,9 +324,20 @@ actor GitHubService: GitHubServiceProtocol {
             return Reviewer(kind: .user, id: login, displayName: login, avatarURL: avatarURL)
         }
         if let slug = requested.slug {
-            return Reviewer(kind: .team, id: slug, displayName: requested.name ?? slug, avatarURL: avatarURL)
+            return Reviewer(
+                kind: .team,
+                id: slug,
+                displayName: requested.name ?? slug,
+                avatarURL: avatarURL
+            )
         }
         return nil
+    }
+
+    private static func teamKey(from requested: RequestedReviewer) -> String? {
+        guard let slug = requested.slug else { return nil }
+        guard let organization = requested.organization?.login, !organization.isEmpty else { return slug }
+        return "\(organization)/\(slug)"
     }
 }
 
@@ -358,10 +389,16 @@ private struct ReviewRequestNode: Codable {
 }
 
 private struct RequestedReviewer: Codable {
+    let id: String?
     let login: String?
     let slug: String?
     let name: String?
     let avatarUrl: String?
+    let organization: TeamOrganization?
+}
+
+private struct TeamOrganization: Codable {
+    let login: String
 }
 
 private struct LatestReviewConnection: Codable {
