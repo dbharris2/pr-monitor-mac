@@ -73,6 +73,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install lint tools
+        run: bash .github/scripts/install-lint-tools.sh
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
