@@ -20,6 +20,10 @@ struct PRSection: View {
     var onOpenPR: (() -> Void)?
     var onSnoozePR: ((PullRequest, SnoozeDuration) -> Void)?
     var onUnsnoozePR: ((PullRequest) -> Void)?
+    var reviewerGroups: [ReviewerGroup] = []
+    var canModifyPR: ((PullRequest) -> Bool)?
+    var onRequestReviewers: ((PullRequest, ReviewerGroup) -> Void)?
+    var onSetDraft: ((PullRequest, Bool) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -103,7 +107,11 @@ struct PRSection: View {
                         statusColorOverride: statusColorOverride,
                         onOpen: onOpenPR,
                         onSnooze: onSnoozePR.map { callback in { pr, duration in callback(pr, duration) } },
-                        onUnsnooze: onUnsnoozePR.map { callback in { pr in callback(pr) } }
+                        onUnsnooze: onUnsnoozePR.map { callback in { pr in callback(pr) } },
+                        reviewerGroups: reviewerGroups,
+                        canModifyPR: canModifyPR,
+                        onRequestReviewers: onRequestReviewers,
+                        onSetDraft: onSetDraft
                     )
                 }
             }
@@ -117,6 +125,10 @@ struct PRRow: View {
     var onOpen: (() -> Void)?
     var onSnooze: ((PullRequest, SnoozeDuration) -> Void)?
     var onUnsnooze: ((PullRequest) -> Void)?
+    var reviewerGroups: [ReviewerGroup] = []
+    var canModifyPR: ((PullRequest) -> Bool)?
+    var onRequestReviewers: ((PullRequest, ReviewerGroup) -> Void)?
+    var onSetDraft: ((PullRequest, Bool) -> Void)?
     @State private var isHovered = false
 
     private var statusColor: Color {
@@ -220,6 +232,22 @@ struct PRRow: View {
             isHovered = hovering
         }
         .contextMenu {
+            if canModifyPR?(pr) == true {
+                if let onRequestReviewers, !reviewerGroups.isEmpty {
+                    Menu("Request reviewers") {
+                        ForEach(reviewerGroups) { group in
+                            Button(group.name) { onRequestReviewers(pr, group) }
+                        }
+                    }
+                }
+
+                if let onSetDraft {
+                    Button(pr.isDraft ? "Mark ready for review" : "Convert to draft") {
+                        onSetDraft(pr, !pr.isDraft)
+                    }
+                }
+            }
+
             if let onSnooze {
                 Menu("Snooze") {
                     ForEach(SnoozeDuration.allCases, id: \.self) { duration in

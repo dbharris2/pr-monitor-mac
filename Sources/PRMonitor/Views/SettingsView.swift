@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var launchAtLogin = false
     @State private var showSignOutInstructions = false
     @State private var editingFilter: ReviewFilter?
+    @State private var editingReviewerGroup: ReviewerGroup?
 
     private let pollIntervalOptions: [(String, TimeInterval)] = [
         ("1 minute", 60),
@@ -61,6 +62,50 @@ struct SettingsView: View {
             }
 
             Section {
+                if appState.reviewerGroups.isEmpty {
+                    Text("Create groups of GitHub usernames to request together from a PR's context menu.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(appState.reviewerGroups) { group in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(group.name)
+                                Text(group.usernames.map { "@\($0)" }.joined(separator: ", "))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Button("Edit") {
+                                editingReviewerGroup = group
+                            }
+                            .buttonStyle(.borderless)
+                            Button {
+                                appState.deleteReviewerGroup(group)
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .foregroundStyle(.red)
+                        }
+                    }
+                }
+
+                HStack {
+                    Spacer()
+                    Button("Add reviewer group") {
+                        editingReviewerGroup = ReviewerGroup(name: "", usernames: [])
+                    }
+                    .controlSize(.small)
+                }
+            } header: {
+                Text("Reviewer groups")
+            } footer: {
+                Text("Reviewer groups are local to this Mac and use GitHub usernames.")
+            }
+
+            Section {
                 if appState.customReviewFilters.isEmpty {
                     Text("Create filters for specific teams or review types.")
                         .font(.caption)
@@ -104,9 +149,13 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440, height: 560)
+        .frame(width: 440, height: 640)
         .sheet(item: $editingFilter) { filter in
             ReviewFilterEditor(filter: filter)
+                .environmentObject(appState)
+        }
+        .sheet(item: $editingReviewerGroup) { group in
+            ReviewerGroupEditor(group: group)
                 .environmentObject(appState)
         }
         .task {
@@ -210,6 +259,109 @@ struct SettingsView: View {
         } catch {
             // Silently fail - user can retry via the toggle
         }
+    }
+}
+
+struct ReviewerGroupEditor: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) private var dismiss
+
+    let group: ReviewerGroup
+    @State private var name: String
+    @State private var usernames: [String]
+    @State private var newUsername = ""
+
+    init(group: ReviewerGroup) {
+        self.group = group
+        _name = State(initialValue: group.name)
+        _usernames = State(initialValue: group.usernames)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Form {
+                TextField("Group name", text: $name, prompt: Text("e.g. Backend reviewers"))
+
+                Section("GitHub usernames") {
+                    if usernames.isEmpty {
+                        Text("Add at least one username.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(usernames.indices, id: \.self) { index in
+                            HStack(spacing: 8) {
+                                TextField("Username", text: $usernames[index])
+                                    .labelsHidden()
+                                Button {
+                                    usernames.remove(at: index)
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(.red)
+                            }
+                        }
+                    }
+
+                    HStack {
+                        TextField(
+                            "Add username",
+                            text: $newUsername,
+                            prompt: Text("e.g. OctoCat")
+                        )
+                        .onSubmit(addUsername)
+                        Button {
+                            addUsername()
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(normalizedNewUsername.isEmpty || containsUsername(normalizedNewUsername))
+                    }
+                }
+            }
+            .formStyle(.grouped)
+
+            HStack {
+                Button("Cancel") { dismiss() }
+                Spacer()
+                Button("Save") {
+                    appState.saveReviewerGroup(ReviewerGroup(
+                        id: group.id,
+                        name: name,
+                        usernames: usernames
+                    ))
+                    dismiss()
+                }
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || normalizedUsernames.isEmpty)
+            }
+            .padding()
+        }
+        .frame(width: 400, height: 360)
+    }
+
+    private var normalizedNewUsername: String {
+        newUsername.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var normalizedUsernames: [String] {
+        var seen = Set<String>()
+        return usernames.compactMap { username in
+            let normalized = username.trimmingCharacters(in: .whitespacesAndNewlines)
+            let comparisonKey = normalized.lowercased()
+            guard !normalized.isEmpty, seen.insert(comparisonKey).inserted else { return nil }
+            return normalized
+        }
+    }
+
+    private func containsUsername(_ username: String) -> Bool {
+        normalizedUsernames.contains { $0.caseInsensitiveCompare(username) == .orderedSame }
+    }
+
+    private func addUsername() {
+        guard !normalizedNewUsername.isEmpty, !containsUsername(normalizedNewUsername) else { return }
+        usernames.append(normalizedNewUsername)
+        newUsername = ""
     }
 }
 
