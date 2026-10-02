@@ -225,6 +225,16 @@ struct MenuContent: View {
         appState.snoozeManager.snooze(pr, duration: duration)
     }
 
+    private func requestReviewers(_ pr: PullRequest, group: ReviewerGroup) {
+        dismissMenu()
+        Task { await appState.requestReviewers(for: pr, group: group) }
+    }
+
+    private func setDraft(_ pr: PullRequest, isDraft: Bool) {
+        dismissMenu()
+        Task { await appState.setDraft(isDraft, for: pr) }
+    }
+
     private var prSectionsLayout: MenuPRSections {
         MenuPRSections(
             needsReviewCount: appState.visibleNeedsReview.count,
@@ -255,7 +265,11 @@ struct MenuContent: View {
             showTopSeparator: !appState.customReviewFilters.isEmpty,
             statusColorOverride: .gitHubOrange,
             onOpenPR: dismissMenu,
-            onSnoozePR: snoozePR
+            onSnoozePR: snoozePR,
+            reviewerGroups: appState.reviewerGroups,
+            canModifyPR: appState.isAuthoredByCurrentUser,
+            onRequestReviewers: requestReviewers,
+            onSetDraft: setDraft
         )
 
         PRSection(
@@ -265,7 +279,11 @@ struct MenuContent: View {
             sectionIcon: .asset("FileDiffIcon"),
             sectionColor: .red,
             showTopSeparator: true,
-            onOpenPR: dismissMenu
+            onOpenPR: dismissMenu,
+            reviewerGroups: appState.reviewerGroups,
+            canModifyPR: appState.isAuthoredByCurrentUser,
+            onRequestReviewers: requestReviewers,
+            onSetDraft: setDraft
         )
 
         PRSection(
@@ -275,7 +293,11 @@ struct MenuContent: View {
             sectionIcon: .sfSymbol("checkmark.circle.fill"),
             sectionColor: .green,
             showTopSeparator: true,
-            onOpenPR: dismissMenu
+            onOpenPR: dismissMenu,
+            reviewerGroups: appState.reviewerGroups,
+            canModifyPR: appState.isAuthoredByCurrentUser,
+            onRequestReviewers: requestReviewers,
+            onSetDraft: setDraft
         )
 
         PRSection(
@@ -285,7 +307,11 @@ struct MenuContent: View {
             sectionIcon: .asset("HourglassIcon"),
             sectionColor: .blue,
             showTopSeparator: true,
-            onOpenPR: dismissMenu
+            onOpenPR: dismissMenu,
+            reviewerGroups: appState.reviewerGroups,
+            canModifyPR: appState.isAuthoredByCurrentUser,
+            onRequestReviewers: requestReviewers,
+            onSetDraft: setDraft
         )
 
         PRSection(
@@ -296,7 +322,11 @@ struct MenuContent: View {
             sectionColor: .purple,
             showTopSeparator: true,
             onOpenPR: dismissMenu,
-            onSnoozePR: snoozePR
+            onSnoozePR: snoozePR,
+            reviewerGroups: appState.reviewerGroups,
+            canModifyPR: appState.isAuthoredByCurrentUser,
+            onRequestReviewers: requestReviewers,
+            onSetDraft: setDraft
         )
 
         PRSection(
@@ -306,7 +336,11 @@ struct MenuContent: View {
             sectionIcon: .sfSymbol("doc.text.fill"),
             sectionColor: .secondary,
             showTopSeparator: true,
-            onOpenPR: dismissMenu
+            onOpenPR: dismissMenu,
+            reviewerGroups: appState.reviewerGroups,
+            canModifyPR: appState.isAuthoredByCurrentUser,
+            onRequestReviewers: requestReviewers,
+            onSetDraft: setDraft
         )
 
         if !appState.snoozedPRs.isEmpty {
@@ -318,7 +352,11 @@ struct MenuContent: View {
                 sectionColor: .yellow,
                 showTopSeparator: true,
                 onOpenPR: dismissMenu,
-                onUnsnoozePR: { pr in appState.snoozeManager.unsnooze(prID: pr.id) }
+                onUnsnoozePR: { pr in appState.snoozeManager.unsnooze(prID: pr.id) },
+                reviewerGroups: appState.reviewerGroups,
+                canModifyPR: appState.isAuthoredByCurrentUser,
+                onRequestReviewers: requestReviewers,
+                onSetDraft: setDraft
             )
         }
     }

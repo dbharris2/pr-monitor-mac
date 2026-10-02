@@ -7,6 +7,8 @@ private actor MockGitHubService: GitHubServiceProtocol {
     var resultToReturn: PRFetchResults?
     var errorToThrow: Error?
     var fetchCallCount = 0
+    var reviewerRequests: [(PullRequest, [String])] = []
+    var draftRequests: [(PullRequest, Bool)] = []
 
     func configure(result: PRFetchResults) {
         resultToReturn = result
@@ -28,6 +30,14 @@ private actor MockGitHubService: GitHubServiceProtocol {
 
     func fetchLatestRelease() async throws -> String? {
         nil
+    }
+
+    func requestReviewers(for pr: PullRequest, usernames: [String]) async throws {
+        reviewerRequests.append((pr, usernames))
+    }
+
+    func setDraft(_ isDraft: Bool, for pr: PullRequest) async throws {
+        draftRequests.append((pr, isDraft))
     }
 }
 
@@ -590,6 +600,56 @@ final class AppStateTests: XCTestCase {
 
         XCTAssertEqual(reloadedState.customReviewFilters, [filter])
         XCTAssertEqual(reloadedState.activeReviewFilter, filter)
+    }
+
+    func testReviewerGroupsNormalizeAndPersist() {
+        let group = ReviewerGroup(
+            id: "backend",
+            name: " Backend ",
+            usernames: [" Alice ", "alice", "", "BOB"]
+        )
+
+        appState.saveReviewerGroup(group)
+
+        XCTAssertEqual(
+            appState.reviewerGroups,
+            [ReviewerGroup(id: "backend", name: "Backend", usernames: ["Alice", "BOB"])]
+        )
+
+        let reloadedState = AppState(
+            service: mockService,
+            gh: mockGH,
+            startAutomatically: false,
+            userDefaults: userDefaults
+        )
+        XCTAssertEqual(reloadedState.reviewerGroups, appState.reviewerGroups)
+    }
+
+    func testPRActionsCallServiceForAuthoredPR() async {
+        let pr = makePR(id: "authored", author: "tester")
+        let group = ReviewerGroup(name: "Reviewers", usernames: ["alice", "bob"])
+
+        await appState.requestReviewers(for: pr, group: group)
+        await appState.setDraft(true, for: pr)
+
+        let reviewerRequests = await mockService.reviewerRequests
+        let draftRequests = await mockService.draftRequests
+        XCTAssertEqual(reviewerRequests.map(\.1), [["alice", "bob"]])
+        XCTAssertEqual(draftRequests.map(\.1), [true])
+    }
+
+    func testPRActionsRejectPRAuthoredBySomeoneElse() async {
+        let pr = makePR(id: "not-authored", author: "someone-else")
+        let group = ReviewerGroup(name: "Reviewers", usernames: ["alice"])
+
+        await appState.requestReviewers(for: pr, group: group)
+        await appState.setDraft(true, for: pr)
+
+        let reviewerRequests = await mockService.reviewerRequests
+        let draftRequests = await mockService.draftRequests
+        XCTAssertTrue(reviewerRequests.isEmpty)
+        XCTAssertTrue(draftRequests.isEmpty)
+        XCTAssertTrue(appState.error?.contains("authored") == true)
     }
 
     func testReviewFilterPersistsAuthorModes() throws {

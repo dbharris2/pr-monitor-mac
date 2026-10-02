@@ -9,6 +9,8 @@ private final actor MockGHCommand: GHCommandProtocol {
 
     private var handlers: [Handler] = []
     private(set) var callCount = 0
+    private(set) var lastArguments: [String] = []
+    private(set) var lastStdin: Data?
 
     func install(handlers: [Handler]) {
         self.handlers = handlers
@@ -27,6 +29,8 @@ private final actor MockGHCommand: GHCommandProtocol {
 
     func runExpectingSuccess(arguments: [String], stdin: Data?, timeout _: TimeInterval) async throws -> Data {
         callCount += 1
+        lastArguments = arguments
+        lastStdin = stdin
         for handler in handlers {
             if let result = handler(arguments, stdin) {
                 switch result {
@@ -142,6 +146,78 @@ private func installHandlers(
 
 final class GitHubServiceTests: XCTestCase {
     // MARK: PR Categorization
+
+    func testRequestReviewersUsesGitHubReviewersEndpoint() async throws {
+        let mock = MockGHCommand()
+        await mock.install(handlers: [{ _, _ in .success(Data()) }])
+        let url = try XCTUnwrap(URL(string: "https://github.com/owner/repo/pull/42"))
+        let pr = PullRequest(
+            id: "pr-1",
+            number: 42,
+            title: "Reviewers",
+            url: url,
+            repository: "owner/repo",
+            author: "tester",
+            authorAvatarURL: nil,
+            createdAt: Date(),
+            updatedAt: Date(),
+            isDraft: false,
+            reviewDecision: nil,
+            viewerDidApprove: false,
+            hasAnyApproval: false,
+            additions: 0,
+            deletions: 0,
+            changedFiles: 0,
+            totalComments: 0,
+            reviewers: []
+        )
+
+        let service = GitHubService(gh: mock)
+        try await service.requestReviewers(for: pr, usernames: ["alice", "bob"])
+
+        let arguments = await mock.lastArguments
+        XCTAssertEqual(arguments, [
+            "api", "--method", "POST",
+            "repos/owner/repo/pulls/42/requested_reviewers",
+            "--input", "-",
+        ])
+        let stdin = await mock.lastStdin
+        let body = try XCTUnwrap(stdin)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: [String]])
+        XCTAssertEqual(json["reviewers"], ["alice", "bob"])
+    }
+
+    func testSetDraftUsesGitHubCLIReadyCommand() async throws {
+        let mock = MockGHCommand()
+        await mock.install(handlers: [{ _, _ in .success(Data()) }])
+        let url = try XCTUnwrap(URL(string: "https://github.com/owner/repo/pull/42"))
+        let pr = PullRequest(
+            id: "pr-1",
+            number: 42,
+            title: "Draft",
+            url: url,
+            repository: "owner/repo",
+            author: "tester",
+            authorAvatarURL: nil,
+            createdAt: Date(),
+            updatedAt: Date(),
+            isDraft: false,
+            reviewDecision: nil,
+            viewerDidApprove: false,
+            hasAnyApproval: false,
+            additions: 0,
+            deletions: 0,
+            changedFiles: 0,
+            totalComments: 0,
+            reviewers: []
+        )
+
+        let service = GitHubService(gh: mock)
+        try await service.setDraft(true, for: pr)
+
+        let arguments = await mock.lastArguments
+        XCTAssertEqual(arguments, ["pr", "ready", "42", "--repo", "owner/repo", "--undo"])
+    }
 
     func testValidResponseCategorizesCorrectly() async throws {
         let reviewRequested = prNode(

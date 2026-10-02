@@ -4,6 +4,7 @@ import SwiftUI
 import UserNotifications
 
 @MainActor
+// swiftlint:disable type_body_length
 class AppState: ObservableObject {
     @Published var needsReview: [PullRequest] = []
     @Published var waitingForReviewers: [PullRequest] = []
@@ -20,6 +21,7 @@ class AppState: ObservableObject {
     @Published var updateAvailable: String?
     @Published var ghAuthStatus: GHAuthStatus = .unknown
     @Published private(set) var customReviewFilters: [ReviewFilter] = []
+    @Published private(set) var reviewerGroups: [ReviewerGroup] = []
 
     var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
@@ -131,6 +133,61 @@ class AppState: ObservableObject {
         persistReviewFilters()
     }
 
+    func saveReviewerGroup(_ group: ReviewerGroup) {
+        let normalized = ReviewerGroup(
+            id: group.id,
+            name: group.name.trimmingCharacters(in: .whitespacesAndNewlines),
+            usernames: normalizedUsernames(group.usernames)
+        )
+        guard !normalized.name.isEmpty, !normalized.usernames.isEmpty else { return }
+
+        if let index = reviewerGroups.firstIndex(where: { $0.id == group.id }) {
+            reviewerGroups[index] = normalized
+        } else {
+            reviewerGroups.append(normalized)
+        }
+        reviewerGroups.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        persistReviewerGroups()
+    }
+
+    func deleteReviewerGroup(_ group: ReviewerGroup) {
+        reviewerGroups.removeAll { $0.id == group.id }
+        persistReviewerGroups()
+    }
+
+    func isAuthoredByCurrentUser(_ pr: PullRequest) -> Bool {
+        guard case let .authenticated(login) = ghAuthStatus else { return false }
+        return login.caseInsensitiveCompare(pr.author) == .orderedSame
+    }
+
+    func requestReviewers(for pr: PullRequest, group: ReviewerGroup) async {
+        guard isAuthoredByCurrentUser(pr) else {
+            error = "You can only manage reviewers on PRs you authored."
+            return
+        }
+
+        do {
+            try await gitHubService.requestReviewers(for: pr, usernames: group.usernames)
+            await refresh()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    func setDraft(_ isDraft: Bool, for pr: PullRequest) async {
+        guard isAuthoredByCurrentUser(pr) else {
+            error = "You can only change the status of PRs you authored."
+            return
+        }
+
+        do {
+            try await gitHubService.setDraft(isDraft, for: pr)
+            await refresh()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     func counts(for filter: ReviewFilter) -> ReviewFilterCounts {
         ReviewFilterCounts(
             needsReview: filteredPRs(needsReview, filter: filter).count,
@@ -149,6 +206,7 @@ class AppState: ObservableObject {
         self.gh = gh
         self.userDefaults = userDefaults
         customReviewFilters = Self.loadReviewFilters(from: userDefaults)
+        reviewerGroups = Self.loadReviewerGroups(from: userDefaults)
         snoozeCancellable = snoozeManager.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
@@ -351,9 +409,29 @@ class AppState: ObservableObject {
         return (try? JSONDecoder().decode([ReviewFilter].self, from: data)) ?? []
     }
 
+    private static func loadReviewerGroups(from userDefaults: UserDefaults) -> [ReviewerGroup] {
+        guard let data = userDefaults.data(forKey: "reviewerGroups") else { return [] }
+        return (try? JSONDecoder().decode([ReviewerGroup].self, from: data)) ?? []
+    }
+
     private func persistReviewFilters() {
         guard let data = try? JSONEncoder().encode(customReviewFilters) else { return }
         userDefaults.set(data, forKey: "reviewFilters")
+    }
+
+    private func persistReviewerGroups() {
+        guard let data = try? JSONEncoder().encode(reviewerGroups) else { return }
+        userDefaults.set(data, forKey: "reviewerGroups")
+    }
+
+    private func normalizedUsernames(_ usernames: [String]) -> [String] {
+        var seen = Set<String>()
+        return usernames.compactMap { username in
+            let normalized = username.trimmingCharacters(in: .whitespacesAndNewlines)
+            let comparisonKey = normalized.lowercased()
+            guard !normalized.isEmpty, seen.insert(comparisonKey).inserted else { return nil }
+            return normalized
+        }
     }
 
     private func sendReviewRequestedNotification(for pr: PullRequest) {
@@ -646,6 +724,8 @@ class AppState: ObservableObject {
         return state
     }
 }
+
+// swiftlint:enable type_body_length
 
 #if DEBUG
     extension AppState {

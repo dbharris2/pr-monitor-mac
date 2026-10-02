@@ -3,6 +3,8 @@ import Foundation
 protocol GitHubServiceProtocol: Sendable {
     func fetchAllPRs() async throws -> PRFetchResults
     func fetchLatestRelease() async throws -> String?
+    func requestReviewers(for pr: PullRequest, usernames: [String]) async throws
+    func setDraft(_ isDraft: Bool, for pr: PullRequest) async throws
 }
 
 actor GitHubService: GitHubServiceProtocol {
@@ -105,6 +107,45 @@ actor GitHubService: GitHubServiceProtocol {
         } catch {
             // 404 (no releases) and any other failure: best-effort, return nil
             return nil
+        }
+    }
+
+    func requestReviewers(for pr: PullRequest, usernames: [String]) async throws {
+        guard !usernames.isEmpty else {
+            throw GitHubError.apiError("Reviewer group has no usernames.")
+        }
+
+        let body = try JSONSerialization.data(withJSONObject: ["reviewers": usernames])
+        do {
+            _ = try await gh.runExpectingSuccess(
+                arguments: [
+                    "api",
+                    "--method", "POST",
+                    "repos/\(pr.repository)/pulls/\(pr.number)/requested_reviewers",
+                    "--input", "-",
+                ],
+                stdin: body,
+                timeout: 30
+            )
+        } catch let error as GHCommand.GHError {
+            throw Self.mapGHError(error)
+        }
+    }
+
+    func setDraft(_ isDraft: Bool, for pr: PullRequest) async throws {
+        do {
+            _ = try await gh.runExpectingSuccess(
+                arguments: [
+                    "pr",
+                    "ready",
+                    String(pr.number),
+                    "--repo", pr.repository,
+                ] + (isDraft ? ["--undo"] : []),
+                stdin: nil,
+                timeout: 30
+            )
+        } catch let error as GHCommand.GHError {
+            throw Self.mapGHError(error)
         }
     }
 
