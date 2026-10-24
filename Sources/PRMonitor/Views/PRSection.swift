@@ -9,7 +9,129 @@ enum SectionIcon {
     case asset(String)
 }
 
+private struct PRSupplementalStatus {
+    enum Kind {
+        case approval
+        case changesRequested
+        case mergeIssue
+    }
+
+    let symbol: String
+    let text: String
+    let color: Color
+    let approvers: [Reviewer]
+    let changeRequestors: [Reviewer]
+    let mergeText: String?
+    let kind: Kind
+}
+
+private struct PRSupplementalRow: View {
+    let status: PRSupplementalStatus
+    let isHovered: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            switch status.kind {
+            case .approval:
+                PRReviewOutcomeGroup(
+                    symbol: status.symbol,
+                    action: status.text,
+                    color: .green,
+                    reviewers: status.approvers,
+                    isHovered: isHovered
+                )
+
+                if let mergeText = status.mergeText {
+                    Text("·")
+                        .foregroundStyle(isHovered ? .white.opacity(0.7) : .secondary)
+                    Text(mergeText)
+                        .foregroundStyle(isHovered ? .white.opacity(0.85) : status.color)
+                }
+
+            case .changesRequested:
+                PRReviewOutcomeGroup(
+                    symbol: status.symbol,
+                    action: status.text,
+                    color: status.color,
+                    reviewers: status.changeRequestors,
+                    isHovered: isHovered
+                )
+
+                if !status.approvers.isEmpty {
+                    Text("·")
+                        .foregroundStyle(isHovered ? .white.opacity(0.7) : .secondary)
+                    PRReviewOutcomeGroup(
+                        symbol: "checkmark.circle.fill",
+                        action: "Accepted",
+                        color: .green,
+                        reviewers: status.approvers,
+                        isHovered: isHovered
+                    )
+                }
+
+            case .mergeIssue:
+                statusLabel(
+                    symbol: status.symbol,
+                    text: status.text,
+                    iconColor: isHovered ? .white.opacity(0.85) : status.color,
+                    textColor: isHovered ? .white.opacity(0.85) : status.color
+                )
+            }
+        }
+        .menuFont(.caption)
+        .lineLimit(1)
+        .truncationMode(.tail)
+    }
+
+    private func statusLabel(
+        symbol: String,
+        text: String,
+        iconColor: Color,
+        textColor: Color
+    ) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: symbol)
+                .foregroundStyle(iconColor)
+            Text(text)
+                .foregroundStyle(textColor)
+        }
+    }
+}
+
+private struct PRReviewOutcomeGroup: View {
+    let symbol: String
+    let action: String
+    let color: Color
+    let reviewers: [Reviewer]
+    let isHovered: Bool
+
+    private var label: String {
+        guard !reviewers.isEmpty else { return action }
+        return "\(action) by \(reviewers.map(\.displayName).joined(separator: ", "))"
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: symbol)
+                .foregroundStyle(isHovered ? .white.opacity(0.85) : color)
+
+            if reviewers.isEmpty {
+                Text(action)
+                    .foregroundStyle(isHovered ? .white.opacity(0.85) : color)
+            } else {
+                ReviewerAvatars(reviewers: reviewers, isHovered: isHovered)
+                    .fixedSize()
+            }
+        }
+        .help(label)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+    }
+}
+
 struct PRSection: View {
+    @Environment(\.menuFontScale) private var menuFontScale
+
     let title: String
     let prs: [PullRequest]
     @Binding var isExpanded: Bool
@@ -26,93 +148,79 @@ struct PRSection: View {
     var onSetDraft: ((PullRequest, Bool) -> Void)?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if showTopSeparator {
-                Divider()
-                    .padding(.horizontal, 12)
-            }
+        if !prs.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                if showTopSeparator {
+                    Divider()
+                        .padding(.horizontal, 12)
+                }
 
-            Button {
-                isExpanded.toggle()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 10)
+                Button {
+                    isExpanded.toggle()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .menuFont(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 10)
 
-                    if let sectionIcon {
-                        switch sectionIcon {
-                        case let .sfSymbol(name):
-                            if prs.isEmpty {
+                        if let sectionIcon {
+                            switch sectionIcon {
+                            case let .sfSymbol(name):
                                 Image(systemName: name)
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.tertiary)
-                                    .frame(width: 16)
-                            } else {
-                                Image(systemName: name)
-                                    .font(.system(size: 12))
+                                    .menuFont(.caption)
                                     .foregroundStyle(sectionColor ?? .primary)
-                                    .frame(width: 16)
-                            }
-                        case let .asset(name):
-                            if prs.isEmpty {
+                                    .frame(width: 16 * menuFontScale)
+                            case let .asset(name):
                                 Image(name)
                                     .renderingMode(.template)
                                     .resizable()
                                     .aspectRatio(contentMode: .fit)
-                                    .frame(width: 14, height: 14)
-                                    .foregroundStyle(.tertiary)
-                            } else {
-                                Image(name)
-                                    .renderingMode(.template)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(width: 14, height: 14)
+                                    .frame(width: 14 * menuFontScale, height: 14 * menuFontScale)
                                     .foregroundStyle(sectionColor ?? .primary)
                             }
                         }
-                    }
 
-                    Text(title)
-                        .font(.headline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(prs.isEmpty ? .secondary : .primary)
-
-                    Spacer()
-
-                    if !prs.isEmpty, let sectionColor {
-                        Text("\(prs.count)")
-                            .font(.caption)
+                        Text(title)
+                            .menuFont(.headline)
                             .fontWeight(.medium)
-                            .foregroundStyle(sectionColor)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 1)
-                            .background(
-                                Capsule()
-                                    .fill(sectionColor.opacity(0.15))
-                            )
-                    }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+                            .foregroundStyle(.primary)
 
-            if isExpanded, !prs.isEmpty {
-                ForEach(prs) { pr in
-                    PRRow(
-                        pr: pr,
-                        statusColorOverride: statusColorOverride,
-                        onOpen: onOpenPR,
-                        onSnooze: onSnoozePR.map { callback in { pr, duration in callback(pr, duration) } },
-                        onUnsnooze: onUnsnoozePR.map { callback in { pr in callback(pr) } },
-                        reviewerGroups: reviewerGroups,
-                        canModifyPR: canModifyPR,
-                        onRequestReviewers: onRequestReviewers,
-                        onSetDraft: onSetDraft
-                    )
+                        Spacer()
+
+                        if let sectionColor {
+                            Text("\(prs.count)")
+                                .menuFont(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(sectionColor)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 1)
+                                .background(
+                                    Capsule()
+                                        .fill(sectionColor.opacity(0.15))
+                                )
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+
+                if isExpanded {
+                    ForEach(prs) { pr in
+                        PRRow(
+                            pr: pr,
+                            statusColorOverride: statusColorOverride,
+                            onOpen: onOpenPR,
+                            onSnooze: onSnoozePR.map { callback in { pr, duration in callback(pr, duration) } },
+                            onUnsnooze: onUnsnoozePR.map { callback in { pr in callback(pr) } },
+                            reviewerGroups: reviewerGroups,
+                            canModifyPR: canModifyPR,
+                            onRequestReviewers: onRequestReviewers,
+                            onSetDraft: onSetDraft
+                        )
+                    }
                 }
             }
         }
@@ -120,6 +228,9 @@ struct PRSection: View {
 }
 
 struct PRRow: View {
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.menuFontScale) private var menuFontScale
+
     let pr: PullRequest
     var statusColorOverride: Color?
     var onOpen: (() -> Void)?
@@ -138,13 +249,86 @@ struct PRRow: View {
         if pr.isDraft {
             return .secondary
         }
-        switch pr.reviewDecision {
-        case .changesRequested:
+        if pr.reviewDecision == .changesRequested {
             return .red
-        case .approved:
+        }
+        if pr.hasApproval {
             return .green
-        default:
-            return .gitHubOrange
+        }
+        return .gitHubOrange
+    }
+
+    private var supplementalStatus: PRSupplementalStatus? {
+        let mergeStatus = pr.mergeStateStatus
+        let mergeLabel: String? = switch mergeStatus {
+        case .behind: nil
+        case .blocked: nil
+        case .clean: "Ready to merge"
+        case .dirty: "Merge conflict"
+        case .hasHooks: "Ready to merge"
+        case .unknown: "Checking merge status"
+        case .unstable: "Checks not passing"
+        case nil: nil
+        }
+
+        if pr.reviewDecision == .changesRequested {
+            let changeRequestors = pr.changeRequestors ?? []
+            return PRSupplementalStatus(
+                symbol: "xmark.circle.fill",
+                text: "Changes requested",
+                color: .red,
+                approvers: pr.approvers,
+                changeRequestors: changeRequestors,
+                mergeText: nil,
+                kind: .changesRequested
+            )
+        }
+
+        if pr.hasApproval {
+            let statusTint: Color = switch mergeStatus {
+            case .unstable:
+                .orange
+            case .dirty:
+                .red
+            case .unknown:
+                .secondary
+            case .behind, .blocked, .clean, .hasHooks, nil:
+                .green
+            }
+            return PRSupplementalStatus(
+                symbol: "checkmark.circle.fill",
+                text: "Accepted",
+                color: statusTint,
+                approvers: pr.approvers,
+                changeRequestors: [],
+                mergeText: mergeLabel,
+                kind: .approval
+            )
+        }
+
+        return switch mergeStatus {
+        case .dirty:
+            PRSupplementalStatus(
+                symbol: "xmark.circle.fill",
+                text: "Merge conflict",
+                color: .red,
+                approvers: [],
+                changeRequestors: [],
+                mergeText: nil,
+                kind: .mergeIssue
+            )
+        case .unstable:
+            PRSupplementalStatus(
+                symbol: "clock.fill",
+                text: "Checks not passing",
+                color: .orange,
+                approvers: [],
+                changeRequestors: [],
+                mergeText: nil,
+                kind: .mergeIssue
+            )
+        case .behind, .blocked, .clean, .hasHooks, .unknown, nil:
+            nil
         }
     }
 
@@ -169,7 +353,7 @@ struct PRRow: View {
                             .resizable()
                             .foregroundStyle(.secondary)
                     }
-                    .frame(width: 24, height: 24)
+                    .frame(width: 24 * menuFontScale, height: 24 * menuFontScale)
                     .clipShape(Circle())
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -182,14 +366,14 @@ struct PRRow: View {
                             Spacer()
 
                             Text(relativeTime(from: pr.updatedAt))
-                                .font(.caption)
+                                .menuFont(.caption)
                                 .foregroundStyle(isHovered ? .white.opacity(0.7) : .secondary)
                                 .lineLimit(1)
                                 .fixedSize()
                         }
 
                         HStack(spacing: 6) {
-                            Text("\(pr.repository) #\(String(pr.number))")
+                            Text("\(appState.displayRepositoryName(pr.repository)) #\(String(pr.number))")
                                 .lineLimit(1)
                                 .truncationMode(.head)
                             Text("+\(pr.additions)")
@@ -211,15 +395,19 @@ struct PRRow: View {
                             ReviewerAvatars(reviewers: pr.reviewers, isHovered: isHovered)
                                 .fixedSize()
                         }
-                        .font(.caption)
+                        .menuFont(.caption)
                         .foregroundStyle(isHovered ? .white.opacity(0.8) : .secondary)
+
+                        if let supplementalStatus {
+                            PRSupplementalRow(status: supplementalStatus, isHovered: isHovered)
+                        }
                     }
                 }
                 .padding(.leading, 8)
                 .padding(.trailing, 12)
                 .padding(.vertical, 6)
             }
-            .frame(height: 50)
+            .frame(minHeight: supplementalStatus == nil ? 50 : 64)
             .padding(.leading, 12)
             .contentShape(Rectangle())
             .background(
@@ -288,7 +476,7 @@ private struct ReviewerAvatars: View {
 
                 if reviewers.count > maxVisible {
                     Text("+\(reviewers.count - maxVisible)")
-                        .font(.system(size: 9, weight: .medium))
+                        .menuFont(.caption2)
                         .foregroundStyle(isHovered ? .white.opacity(0.7) : .secondary)
                         .padding(.leading, 2)
                 }
@@ -401,4 +589,5 @@ func relativeTime(from date: Date) -> String {
         )
     }
     .frame(width: 380)
+    .environmentObject(AppState.preview)
 }

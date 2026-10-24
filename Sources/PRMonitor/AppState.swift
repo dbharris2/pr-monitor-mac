@@ -48,6 +48,13 @@ class AppState: ObservableObject {
     @AppStorage("pollInterval") var pollInterval: TimeInterval = 300 // 5 minutes
     @AppStorage("notificationsEnabled") var notificationsEnabled: Bool = false
     @AppStorage("menuBarStyle") var menuBarStyle: String = "numbers" // "dots" or "numbers"
+    @AppStorage("repositoryDisplayStyle") var repositoryDisplayStyle: String = RepositoryDisplayStyle.organizationAndName.rawValue
+
+    func displayRepositoryName(_ repository: String) -> String {
+        let style = RepositoryDisplayStyle(rawValue: repositoryDisplayStyle) ?? .organizationAndName
+        return style.displayName(for: repository)
+    }
+
     private let gitHubService: GitHubServiceProtocol
     private let gh: GHCommandProtocol
     private let userDefaults: UserDefaults
@@ -441,7 +448,7 @@ class AppState: ObservableObject {
             let content = UNMutableNotificationContent()
             content.title = "Needs my review"
             content.body = pr.title
-            content.subtitle = "\(pr.repository) #\(pr.number)"
+            content.subtitle = "\(self.displayRepositoryName(pr.repository)) #\(pr.number)"
             content.sound = .default
             content.userInfo = ["url": pr.url.absoluteString]
 
@@ -483,7 +490,7 @@ class AppState: ObservableObject {
             let content = UNMutableNotificationContent()
             content.title = "Approved"
             content.body = pr.title
-            content.subtitle = "\(pr.repository) #\(pr.number)"
+            content.subtitle = "\(self.displayRepositoryName(pr.repository)) #\(pr.number)"
             content.sound = .default
             content.userInfo = ["url": pr.url.absoluteString]
 
@@ -555,7 +562,7 @@ class AppState: ObservableObject {
             let content = UNMutableNotificationContent()
             content.title = "Returned to me"
             content.body = pr.title
-            content.subtitle = "\(pr.repository) #\(pr.number)"
+            content.subtitle = "\(self.displayRepositoryName(pr.repository)) #\(pr.number)"
             content.sound = .default
             content.userInfo = ["url": pr.url.absoluteString]
 

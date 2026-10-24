@@ -34,6 +34,9 @@ struct PullRequest: Identifiable, Codable, Hashable {
     let viewerDidReview: Bool
     let isDirectReviewRequested: Bool
     let requestedTeamKeys: Set<String>
+    let mergeStateStatus: MergeStateStatus?
+    let approvers: [Reviewer]
+    let changeRequestors: [Reviewer]?
 
     init(
         id: String,
@@ -56,7 +59,10 @@ struct PullRequest: Identifiable, Codable, Hashable {
         reviewers: [Reviewer],
         viewerDidReview: Bool = false,
         isDirectReviewRequested: Bool = false,
-        requestedTeamKeys: Set<String> = []
+        requestedTeamKeys: Set<String> = [],
+        mergeStateStatus: MergeStateStatus? = nil,
+        approvers: [Reviewer] = [],
+        changeRequestors: [Reviewer]? = nil
     ) {
         self.id = id
         self.number = number
@@ -79,12 +85,36 @@ struct PullRequest: Identifiable, Codable, Hashable {
         self.viewerDidReview = viewerDidReview
         self.isDirectReviewRequested = isDirectReviewRequested
         self.requestedTeamKeys = requestedTeamKeys
+        self.mergeStateStatus = mergeStateStatus
+        self.approvers = approvers
+        self.changeRequestors = changeRequestors
+    }
+
+    var hasApproval: Bool {
+        switch reviewDecision {
+        case .approved:
+            true
+        case .changesRequested:
+            false
+        case .reviewRequired, nil:
+            hasAnyApproval
+        }
     }
 
     enum ReviewDecision: String, Codable {
         case approved = "APPROVED"
         case changesRequested = "CHANGES_REQUESTED"
         case reviewRequired = "REVIEW_REQUIRED"
+    }
+
+    enum MergeStateStatus: String, Codable {
+        case behind = "BEHIND"
+        case blocked = "BLOCKED"
+        case clean = "CLEAN"
+        case dirty = "DIRTY"
+        case hasHooks = "HAS_HOOKS"
+        case unknown = "UNKNOWN"
+        case unstable = "UNSTABLE"
     }
 }
 

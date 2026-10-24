@@ -49,12 +49,24 @@ struct PRMonitorApp: App {
     @StateObject private var appState = AppState(
         startAutomatically: NSClassFromString("XCTestCase") == nil
     )
+    @State private var menuVisibleScreenHeight: CGFloat = 900
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent()
-                .environmentObject(appState)
-                .fitMenuBarExtraWindow(configure: Self.configureMenuWindow)
+            MenuContent(
+                visibleScreenHeight: menuVisibleScreenHeight,
+                menuSize: .large,
+                fontSize: .large
+            )
+            .environmentObject(appState)
+            .fitMenuBarExtraWindow(
+                configure: Self.configureMenuWindow,
+                onVisibleScreenHeightChange: { height in
+                    if abs(menuVisibleScreenHeight - height) > 1 {
+                        menuVisibleScreenHeight = height
+                    }
+                }
+            )
         } label: {
             MenuBarLabel(
                 approvedCount: appState.visibleApproved.count,
@@ -213,9 +225,16 @@ struct MenuBarLabel: View {
 struct MenuContent: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.openSettings) private var openSettings
+    let visibleScreenHeight: CGFloat
+    let menuSize: MenuSizePreset
+    let fontSize: FontSizePreset
 
-    private let menuWidth: CGFloat = 380
-    private let maxPRSectionsHeight: CGFloat = 520
+    private let fixedMenuHeight: CGFloat = 190
+    private let screenHeightBuffer: CGFloat = 40
+
+    private var maxPRSectionsHeight: CGFloat {
+        max(200, visibleScreenHeight - fixedMenuHeight - screenHeightBuffer)
+    }
 
     private func dismissMenu() {
         appState.isMenuPresented = false
@@ -370,7 +389,7 @@ struct MenuContent: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .frame(height: maxPRSectionsHeight)
+            .frame(maxHeight: maxPRSectionsHeight)
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 prSections
@@ -387,7 +406,7 @@ struct MenuContent: View {
 
             if let error = appState.error {
                 Text(error)
-                    .font(.caption)
+                    .menuFont(.caption)
                     .foregroundStyle(.red)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 4)
@@ -427,7 +446,7 @@ struct MenuContent: View {
             HStack {
                 if let lastUpdated = appState.lastUpdated {
                     Text("Updated \(lastUpdated, style: .relative) ago")
-                        .font(.caption)
+                        .menuFont(.caption)
                         .foregroundStyle(.tertiary)
                 }
                 Spacer()
@@ -440,14 +459,14 @@ struct MenuContent: View {
                                 .fill(Color.accentColor)
                                 .frame(width: 6, height: 6)
                             Text("v\(appState.appVersion) → v\(update)")
-                                .font(.caption)
+                                .menuFont(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                     .buttonStyle(.plain)
                 } else {
                     Text("v\(appState.appVersion)")
-                        .font(.caption)
+                        .menuFont(.caption)
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -455,7 +474,9 @@ struct MenuContent: View {
             .padding(.top, 8)
             .padding(.bottom, 6)
         }
-        .frame(width: menuWidth, alignment: .topLeading)
+        .frame(width: menuSize.width, alignment: .topLeading)
+        .menuFont(.body)
+        .environment(\.menuFontScale, fontSize.scale)
         .fixedSize(horizontal: false, vertical: true)
         .background(Color(nsColor: .windowBackgroundColor))
     }
@@ -481,7 +502,7 @@ struct MenuRow: View {
                 } else if let shortcut {
                     Text(shortcut)
                         .foregroundColor(isHovered ? .white.opacity(0.8) : .gray)
-                        .font(.caption)
+                        .menuFont(.caption)
                 }
             }
             .padding(.horizontal, 12)
@@ -512,21 +533,21 @@ struct ReviewFiltersSection: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption2)
+                        .menuFont(.caption2)
                         .foregroundStyle(.tertiary)
                         .frame(width: 10)
 
                     Image(systemName: "line.3.horizontal.decrease.circle")
-                        .font(.system(size: 12))
+                        .menuFont(.caption)
                         .foregroundStyle(Color.accentColor)
                         .frame(width: 16)
 
                     Text("Filters")
-                        .font(.headline)
+                        .menuFont(.headline)
                         .fontWeight(.medium)
 
                     Text(appState.activeReviewFilter.name)
-                        .font(.caption)
+                        .menuFont(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -589,7 +610,7 @@ struct ReviewFilterCountsView: View {
             Text("\(counts.changesRequested)")
                 .foregroundStyle(Color.red)
         }
-        .font(.caption)
+        .menuFont(.caption)
     }
 }
 
@@ -606,7 +627,7 @@ struct SubMenuRow<Content: View>: View {
                 Text(label)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
+                    .menuFont(.caption2)
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
             }
@@ -639,6 +660,6 @@ struct SubMenuRow<Content: View>: View {
 }
 
 #Preview {
-    MenuContent()
+    MenuContent(visibleScreenHeight: 900, menuSize: .large, fontSize: .large)
         .environmentObject(AppState.preview)
 }

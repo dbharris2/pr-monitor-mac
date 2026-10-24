@@ -56,6 +56,12 @@ struct SettingsView: View {
                     Text("Colored numbers").tag("numbers")
                 }
 
+                Picker("Repository display", selection: $appState.repositoryDisplayStyle) {
+                    ForEach(RepositoryDisplayStyle.allCases) { style in
+                        Text(style.title).tag(style.rawValue)
+                    }
+                }
+
                 KeyboardShortcuts.Recorder("Global shortcut:", name: .toggleMenuBar)
             } header: {
                 Text("General")

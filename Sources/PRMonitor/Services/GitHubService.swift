@@ -64,7 +64,7 @@ actor GitHubService: GitHubServiceProtocol {
         for pr in authoredPRs {
             if pr.isDraft {
                 results.drafts.append(pr)
-            } else if pr.reviewDecision == .approved {
+            } else if pr.hasApproval {
                 results.approved.append(pr)
             } else if pr.reviewDecision == .changesRequested {
                 results.changesRequested.append(pr)
@@ -171,6 +171,7 @@ actor GitHubService: GitHubServiceProtocol {
                   nameWithOwner
                 }
                 reviewDecision
+                mergeStateStatus
                 additions
                 deletions
                 changedFiles
@@ -195,9 +196,10 @@ actor GitHubService: GitHubServiceProtocol {
                     }
                   }
                 }
-                latestReviews(first: 5) {
+                reviews(last: 100) {
                   nodes {
                     state
+                    submittedAt
                     author {
                       login
                       avatarUrl(size: 64)
@@ -295,6 +297,11 @@ actor GitHubService: GitHubServiceProtocol {
         } else {
             nil
         }
+        let mergeStateStatus: PullRequest.MergeStateStatus? = if let status = node.mergeStateStatus {
+            PullRequest.MergeStateStatus(rawValue: status)
+        } else {
+            nil
+        }
 
         let authorAvatarURL: URL? = if let avatarUrlString = node.author?.avatarUrl {
             URL(string: avatarUrlString)
@@ -302,15 +309,39 @@ actor GitHubService: GitHubServiceProtocol {
             nil
         }
 
-        let reviewers = Self.mergeReviewers(from: node)
+        let reviewHistory = node.reviewNodes
+        let latestReviews = Self.latestReviewPerAuthor(from: reviewHistory)
+        let reviewers = Self.mergeReviewers(from: node, reviews: latestReviews)
         let requestedReviewers = node.reviewRequests?.nodes.compactMap(\.requestedReviewer) ?? []
         let isDirectReviewRequested = requestedReviewers.contains { $0.login == viewerLogin }
         let requestedTeamKeys = Set(requestedReviewers.compactMap(Self.teamKey(from:)))
 
-        let viewerDidApprove = !viewerLogin.isEmpty && (node.latestReviews?.nodes ?? []).contains {
+        let viewerDidApprove = !viewerLogin.isEmpty && latestReviews.contains {
             $0.author?.login == viewerLogin && $0.state == "APPROVED"
         }
-        let hasAnyApproval = (node.latestReviews?.nodes ?? []).contains { $0.state == "APPROVED" }
+        var approversByLogin: [String: Reviewer] = [:]
+        var changeRequestorsByLogin: [String: Reviewer] = [:]
+        for review in latestReviews where review.state == "APPROVED" {
+            guard let login = review.author?.login else { continue }
+            approversByLogin[login] = Reviewer(
+                kind: .user,
+                id: login,
+                displayName: login,
+                avatarURL: review.author?.avatarUrl.flatMap(URL.init(string:))
+            )
+        }
+        for review in latestReviews where review.state == "CHANGES_REQUESTED" {
+            guard let login = review.author?.login else { continue }
+            changeRequestorsByLogin[login] = Reviewer(
+                kind: .user,
+                id: login,
+                displayName: login,
+                avatarURL: review.author?.avatarUrl.flatMap(URL.init(string:))
+            )
+        }
+        let approvers = approversByLogin.values.sorted { $0.displayName < $1.displayName }
+        let changeRequestors = changeRequestorsByLogin.values.sorted { $0.displayName < $1.displayName }
+        let hasAnyApproval = !approvers.isEmpty
 
         return PullRequest(
             id: id,
@@ -333,11 +364,37 @@ actor GitHubService: GitHubServiceProtocol {
             reviewers: reviewers,
             viewerDidReview: viewerReviewed,
             isDirectReviewRequested: isDirectReviewRequested,
-            requestedTeamKeys: requestedTeamKeys
+            requestedTeamKeys: requestedTeamKeys,
+            mergeStateStatus: mergeStateStatus,
+            approvers: approvers,
+            changeRequestors: changeRequestors
         )
     }
 
-    private static func mergeReviewers(from node: PRNode) -> [Reviewer] {
+    private static func latestReviewPerAuthor(from reviews: [LatestReviewNode]) -> [LatestReviewNode] {
+        struct ReviewEntry {
+            let review: LatestReviewNode
+            let index: Int
+        }
+
+        var latestByAuthor: [String: ReviewEntry] = [:]
+        for (index, review) in reviews.enumerated() {
+            guard let login = review.author?.login else { continue }
+            if let current = latestByAuthor[login] {
+                let isLater = if let newDate = review.submittedAt, let currentDate = current.review.submittedAt {
+                    newDate > currentDate
+                } else {
+                    index > current.index
+                }
+                guard isLater else { continue }
+            }
+            latestByAuthor[login] = ReviewEntry(review: review, index: index)
+        }
+
+        return latestByAuthor.values.sorted { $0.index < $1.index }.map(\.review)
+    }
+
+    private static func mergeReviewers(from node: PRNode, reviews: [LatestReviewNode]) -> [Reviewer] {
         var seenIDs = Set<String>()
         var reviewers: [Reviewer] = []
         for reqNode in node.reviewRequests?.nodes ?? [] {
@@ -346,7 +403,7 @@ actor GitHubService: GitHubServiceProtocol {
                   seenIDs.insert("\(reviewer.kind.rawValue):\(reviewer.id)").inserted else { continue }
             reviewers.append(reviewer)
         }
-        for revNode in node.latestReviews?.nodes ?? [] {
+        for revNode in reviews {
             guard let login = revNode.author?.login,
                   seenIDs.insert("user:\(login)").inserted else { continue }
             reviewers.append(Reviewer(
@@ -413,12 +470,18 @@ private struct PRNode: Codable {
     let author: Author?
     let repository: Repository?
     let reviewDecision: String?
+    let mergeStateStatus: String?
     let additions: Int?
     let deletions: Int?
     let changedFiles: Int?
     let totalCommentsCount: Int?
     let reviewRequests: ReviewRequestConnection?
+    let reviews: LatestReviewConnection?
     let latestReviews: LatestReviewConnection?
+
+    var reviewNodes: [LatestReviewNode] {
+        reviews?.nodes ?? latestReviews?.nodes ?? []
+    }
 }
 
 private struct ReviewRequestConnection: Codable {
@@ -448,6 +511,7 @@ private struct LatestReviewConnection: Codable {
 
 private struct LatestReviewNode: Codable {
     let state: String?
+    let submittedAt: String?
     let author: Author?
 }
 
